@@ -57,16 +57,46 @@ class GenChatVerifier(gl.Contract):
         if not clean_id:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} verification_id cannot be empty")
 
+        if len(clean_id) > 64:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} verification_id length exceeds 64 characters")
+
         if clean_id in self.verifications:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} verification_id already exists")
 
-        if not question_hash or not evidence_hash:
+        clean_title = question_title.strip() if question_title else ""
+        if not clean_title:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} question_title cannot be empty")
+
+        if len(clean_title) > 500:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} question_title length exceeds 500 characters")
+
+        q_hash = question_hash.strip() if question_hash else ""
+        ev_hash = evidence_hash.strip() if evidence_hash else ""
+        if not q_hash or not ev_hash:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} question_hash and evidence_hash are required")
 
-        if not context_summary or not criteria:
+        if len(q_hash) < 32 or len(ev_hash) < 32:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} question_hash and evidence_hash must be valid cryptographic hashes")
+
+        ctx_summary = context_summary.strip() if context_summary else ""
+        crit = criteria.strip() if criteria else ""
+        if not ctx_summary or not crit:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} context_summary and criteria are required")
 
-        sanitized_title = question_title.strip()[:200] if question_title else "GenChat Verification"
+        if len(ctx_summary) > 4000:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} context_summary length exceeds 4000 characters")
+
+        if len(crit) > 2000:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} criteria length exceeds 2000 characters")
+
+        created_ts = created_at.strip() if created_at else ""
+        if not created_ts:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} created_at timestamp is required")
+
+        if len(created_ts) > 60:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} created_at timestamp length exceeds 60 characters")
+
+        sanitized_title = clean_title[:300]
 
         def evaluate():
             prompt = f"""You are an independent validator verifying a critical query or claim for GenChat.
@@ -76,10 +106,10 @@ QUESTION:
 {sanitized_title}
 
 EVIDENCE & CONTEXT SUMMARY:
-{context_summary}
+{ctx_summary}
 
 VERIFICATION CRITERIA:
-{criteria}
+{crit}
 
 REQUIREMENTS:
 1. Examine if the evidence clearly and unambiguously satisfies the verification criteria.
@@ -96,6 +126,12 @@ Respond ONLY with a JSON object matching this schema:
   "rationale": "<concise explanation>"
 }}"""
             res = gl.nondet.exec_prompt(prompt, response_format="json")
+            if isinstance(res, str):
+                try:
+                    res = json.loads(res)
+                except Exception:
+                    pass
+
             if not isinstance(res, dict):
                 raise gl.vm.UserError(f"{ERROR_LLM} Invalid validator response format")
 
@@ -110,6 +146,8 @@ Respond ONLY with a JSON object matching this schema:
                 confidence = 50
 
             rationale = str(res.get("rationale", "Validator evaluation completed.")).strip()[:500]
+            if not rationale:
+                rationale = f"Evaluated with {decision} based on provided evidence and criteria."
 
             return {
                 "decision": decision,
@@ -119,7 +157,7 @@ Respond ONLY with a JSON object matching this schema:
 
         def validator_fn(leaders_res: gl.vm.Result) -> bool:
             if not isinstance(leaders_res, gl.vm.Return):
-                # Deterministic handling: Leader failure
+                # Deterministic handling: Leader failure forces rotation/retry
                 return False
 
             validator_result = evaluate()
@@ -132,7 +170,7 @@ Respond ONLY with a JSON object matching this schema:
             if leader_decision != val_decision:
                 return False
 
-            # Consensus Rule 2: If approved or rejected, confidence tolerance within 35%
+            # Consensus Rule 2: Confidence tolerance within 35%
             leader_conf = leader_data.get("confidence", 50)
             val_conf = validator_result.get("confidence", 50)
             if abs(leader_conf - val_conf) > 35:
@@ -149,15 +187,15 @@ Respond ONLY with a JSON object matching this schema:
         record = VerificationRecord(
             verification_id=clean_id,
             requester=gl.message.sender_address,
-            question_hash=question_hash,
-            evidence_hash=evidence_hash,
+            question_hash=q_hash,
+            evidence_hash=ev_hash,
             question_title=sanitized_title,
             status="CONSENSUS",
             decision=final_decision,
             confidence=final_confidence,
             rationale=final_rationale,
-            created_at=created_at or "",
-            finalized_at=created_at or "",
+            created_at=created_ts,
+            finalized_at=created_ts,
         )
 
         self.verifications[clean_id] = record
@@ -169,12 +207,13 @@ Respond ONLY with a JSON object matching this schema:
     @gl.public.view
     def get_verification(self, verification_id: str) -> dict:
         """
-        Retrieves a verified record by ID.
+        Retrieves a verified record by ID as a structured dictionary.
         """
-        if verification_id not in self.verifications:
+        clean_id = verification_id.strip() if verification_id else ""
+        if not clean_id or clean_id not in self.verifications:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} Verification not found")
 
-        record = self.verifications[verification_id]
+        record = self.verifications[clean_id]
         return {
             "verification_id": record.verification_id,
             "requester": str(record.requester),
@@ -190,11 +229,42 @@ Respond ONLY with a JSON object matching this schema:
         }
 
     @gl.public.view
+    def get_verification_text(self, verification_id: str) -> str:
+        """
+        Retrieves human-readable plain-text verification outcome for direct display in GenChat.
+        Format: "<DECISION> — <CONFIDENCE>% confidence. <RATIONALE>"
+        """
+        clean_id = verification_id.strip() if verification_id else ""
+        if not clean_id or clean_id not in self.verifications:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Verification not found")
+
+        record = self.verifications[clean_id]
+        return f"{record.decision} — {int(record.confidence)}% confidence. {record.rationale}"
+
+    @gl.public.view
+    def get_verification_decision(self, verification_id: str) -> str:
+        """
+        Retrieves the finalized consensus decision as plaintext:
+        APPROVED, REJECTED, or INCONCLUSIVE.
+        """
+        clean_id = verification_id.strip() if verification_id else ""
+        if not clean_id or clean_id not in self.verifications:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} Verification not found")
+
+        return self.verifications[clean_id].decision
+
+    @gl.public.view
     def get_verification_count(self) -> int:
+        """
+        Returns total count of completed verifications.
+        """
         return int(self.verification_count)
 
     @gl.public.view
     def list_verifications(self, offset: int, limit: int) -> list:
+        """
+        Paginates verified records.
+        """
         total = int(self.verification_count)
         if offset < 0 or offset >= total:
             return []

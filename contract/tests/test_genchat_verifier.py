@@ -31,7 +31,7 @@ def test_contract_initialization(direct_vm, direct_deploy, direct_alice):
 
 
 def test_successful_verification_approval(direct_vm, direct_deploy, direct_alice):
-    """Test submitting a verification that achieves consensus approval."""
+    """Test submitting a verification that achieves consensus approval and exposes plaintext."""
     direct_vm.sender = direct_alice
     verifier = direct_deploy("contract/GenChatVerifier.py")
 
@@ -48,6 +48,7 @@ def test_successful_verification_approval(direct_vm, direct_deploy, direct_alice
     assert decision == "APPROVED"
     assert verifier.get_verification_count() == 1
 
+    # 1. Test Structured Getter
     record = verifier.get_verification("v-001")
     assert record["verification_id"] == "v-001"
     assert record["decision"] == "APPROVED"
@@ -57,12 +58,22 @@ def test_successful_verification_approval(direct_vm, direct_deploy, direct_alice
     assert record["evidence_hash"] == SAMPLE_EVIDENCE_HASH
     assert "Swagger" in record["rationale"]
 
+    # 2. Test Plaintext Getter
+    text_result = verifier.get_verification_text("v-001")
+    assert text_result.startswith("APPROVED — 92% confidence.")
+    assert "Swagger docs confirm milestone requirements" in text_result
+
+    # 3. Test Plaintext Decision Getter
+    dec_result = verifier.get_verification_decision("v-001")
+    assert dec_result == "APPROVED"
+
 
 def test_inconclusive_verification_on_ambiguous_evidence(direct_vm, direct_deploy, direct_alice):
     """Test inconclusive handling when evidence is ambiguous or incomplete."""
     direct_vm.sender = direct_alice
     verifier = direct_deploy("contract/GenChatVerifier.py")
 
+    direct_vm.clear_mocks()
     direct_vm.mock_llm(
         r".*independent validator verifying a critical query.*",
         json.dumps({
@@ -87,12 +98,19 @@ def test_inconclusive_verification_on_ambiguous_evidence(direct_vm, direct_deplo
     assert record["decision"] == "INCONCLUSIVE"
     assert record["confidence"] == 40
 
+    text_result = verifier.get_verification_text("v-002")
+    assert text_result.startswith("INCONCLUSIVE — 40% confidence.")
+    assert "CloudWatch" in text_result
+
+    assert verifier.get_verification_decision("v-002") == "INCONCLUSIVE"
+
 
 def test_rejection_verification_when_criteria_violated(direct_vm, direct_deploy, direct_alice):
     """Test rejection outcome when evidence contradicts the claim."""
     direct_vm.sender = direct_alice
     verifier = direct_deploy("contract/GenChatVerifier.py")
 
+    direct_vm.clear_mocks()
     direct_vm.mock_llm(
         r".*independent validator verifying a critical query.*",
         json.dumps({
@@ -115,6 +133,12 @@ def test_rejection_verification_when_criteria_violated(direct_vm, direct_deploy,
     assert decision == "REJECTED"
     record = verifier.get_verification("v-003")
     assert record["decision"] == "REJECTED"
+
+    text_result = verifier.get_verification_text("v-003")
+    assert text_result.startswith("REJECTED — 88% confidence.")
+    assert "404 on critical routes" in text_result
+
+    assert verifier.get_verification_decision("v-003") == "REJECTED"
 
 
 def test_duplicate_verification_id_reverts(direct_vm, direct_deploy, direct_alice):
@@ -144,11 +168,12 @@ def test_duplicate_verification_id_reverts(direct_vm, direct_deploy, direct_alic
         )
 
 
-def test_missing_required_fields_revert(direct_vm, direct_deploy, direct_alice):
-    """Verify input validation for empty verification_id or hashes."""
+def test_input_validation_and_bounds_revert(direct_vm, direct_deploy, direct_alice):
+    """Verify input validation for empty fields and bounded length limits."""
     direct_vm.sender = direct_alice
     verifier = direct_deploy("contract/GenChatVerifier.py")
 
+    # 1. Empty ID
     with direct_vm.expect_revert("verification_id cannot be empty"):
         verifier.request_verification(
             verification_id="",
@@ -160,12 +185,37 @@ def test_missing_required_fields_revert(direct_vm, direct_deploy, direct_alice):
             created_at="2026-10-04T10:00:00Z",
         )
 
-    with direct_vm.expect_revert("question_hash and evidence_hash are required"):
+    # 2. Too long ID (> 64)
+    with direct_vm.expect_revert("verification_id length exceeds 64 characters"):
         verifier.request_verification(
-            verification_id="v-no-hash",
+            verification_id="v" * 65,
             question_title="Test",
-            question_hash="",
-            evidence_hash="",
+            question_hash=SAMPLE_QUESTION_HASH,
+            evidence_hash=SAMPLE_EVIDENCE_HASH,
+            context_summary=SAMPLE_CONTEXT,
+            criteria=SAMPLE_CRITERIA,
+            created_at="2026-10-04T10:00:00Z",
+        )
+
+    # 3. Empty question title
+    with direct_vm.expect_revert("question_title cannot be empty"):
+        verifier.request_verification(
+            verification_id="v-ok",
+            question_title="",
+            question_hash=SAMPLE_QUESTION_HASH,
+            evidence_hash=SAMPLE_EVIDENCE_HASH,
+            context_summary=SAMPLE_CONTEXT,
+            criteria=SAMPLE_CRITERIA,
+            created_at="2026-10-04T10:00:00Z",
+        )
+
+    # 4. Short / invalid hash
+    with direct_vm.expect_revert("question_hash and evidence_hash must be valid cryptographic hashes"):
+        verifier.request_verification(
+            verification_id="v-short-hash",
+            question_title="Test",
+            question_hash="0xshort",
+            evidence_hash=SAMPLE_EVIDENCE_HASH,
             context_summary=SAMPLE_CONTEXT,
             criteria=SAMPLE_CRITERIA,
             created_at="2026-10-04T10:00:00Z",
@@ -173,9 +223,15 @@ def test_missing_required_fields_revert(direct_vm, direct_deploy, direct_alice):
 
 
 def test_get_nonexistent_verification_reverts(direct_vm, direct_deploy, direct_alice):
-    """Attempting to read an unknown verification ID reverts."""
+    """Attempting to read an unknown verification ID reverts across all view getters."""
     direct_vm.sender = direct_alice
     verifier = direct_deploy("contract/GenChatVerifier.py")
 
     with direct_vm.expect_revert("Verification not found"):
         verifier.get_verification("non-existent-id")
+
+    with direct_vm.expect_revert("Verification not found"):
+        verifier.get_verification_text("non-existent-id")
+
+    with direct_vm.expect_revert("Verification not found"):
+        verifier.get_verification_decision("non-existent-id")

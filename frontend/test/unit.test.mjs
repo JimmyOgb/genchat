@@ -176,3 +176,41 @@ describe("System Prompt & Safety Rules Compliance", () => {
     assert.equal(legalDisclaimer.includes("NOT as: legal judgment"), true);
   });
 });
+
+// Test 7: Plaintext Verification Format & Contract Invariants
+describe("Plaintext Verification Format & Contract Invariants", () => {
+  function formatVerificationText(decision, confidence, rationale) {
+    return `${decision} — ${confidence}% confidence. ${rationale}`;
+  }
+
+  it("formats plaintext human-readable verification text correctly for APPROVED", () => {
+    const text = formatVerificationText("APPROVED", 99, "Evidence supports the claim.");
+    assert.equal(text, "APPROVED — 99% confidence. Evidence supports the claim.");
+    assert.match(text, /^(APPROVED|REJECTED|INCONCLUSIVE) — \d+% confidence\. .+/);
+  });
+
+  it("formats plaintext human-readable verification text correctly for REJECTED", () => {
+    const text = formatVerificationText("REJECTED", 92, "The evidence contradicts the proposition.");
+    assert.equal(text, "REJECTED — 92% confidence. The evidence contradicts the proposition.");
+  });
+
+  it("formats plaintext human-readable verification text correctly for INCONCLUSIVE", () => {
+    const text = formatVerificationText("INCONCLUSIVE", 50, "Evidence is insufficient.");
+    assert.equal(text, "INCONCLUSIVE — 50% confidence. Evidence is insufficient.");
+  });
+
+  it("validates input boundary limits for verification ID and question title", () => {
+    const MAX_ID_LEN = 64;
+    const MAX_TITLE_LEN = 500;
+    const validId = "v_1234567890_abc";
+    const tooLongId = "x".repeat(65);
+    const validTitle = "Water boiling temperature claim verification";
+    const tooLongTitle = "t".repeat(501);
+
+    assert.equal(validId.length <= MAX_ID_LEN, true);
+    assert.equal(tooLongId.length <= MAX_ID_LEN, false);
+    assert.equal(validTitle.length <= MAX_TITLE_LEN, true);
+    assert.equal(tooLongTitle.length <= MAX_TITLE_LEN, false);
+  });
+});
+

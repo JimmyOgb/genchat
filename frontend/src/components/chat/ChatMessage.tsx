@@ -8,7 +8,6 @@ import {
   Scale,
   Sparkles,
   User,
-  ShieldCheck,
   ExternalLink,
 } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
@@ -125,14 +124,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
 
           {/* Verification Badge if verified on GenLayer */}
           {message.verification && (
-            <div className="mt-4 p-3 rounded-xl bg-zinc-950 border border-emerald-500/40 shadow-sm space-y-2">
+            <div className="mt-4 p-3.5 rounded-xl bg-zinc-950 border border-emerald-500/40 shadow-md space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-semibold text-emerald-400">
-                    GenLayer Consensus Verified
+                  <Scale className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold text-emerald-400">
+                    ⚖️ GenLayer Verification
                   </span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-300 font-mono">
+                  <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold uppercase tracking-wider bg-emerald-950 text-emerald-300 border border-emerald-800">
                     {message.verification.decision}
                   </span>
                 </div>
@@ -148,13 +147,28 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                   </a>
                 )}
               </div>
-              <p className="text-xs text-zinc-300 italic">
-                &ldquo;{message.verification.rationale}&rdquo;
-              </p>
-              <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-mono">
-                <span>Confidence: {message.verification.confidence}%</span>
-                <span>•</span>
-                <span>ID: {message.verification.verificationId}</span>
+
+              {/* Plaintext Human-Readable Verification Result */}
+              <div className="p-2.5 rounded-lg bg-zinc-900/80 border border-zinc-800 text-xs text-zinc-200">
+                <div className="font-semibold text-emerald-300 mb-1">
+                  {message.verification.plainText ||
+                    `${message.verification.decision} — ${message.verification.confidence}% confidence`}
+                </div>
+                {message.verification.rationale && (
+                  <p className="text-zinc-300 italic text-xs">
+                    &ldquo;{message.verification.rationale}&rdquo;
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono pt-0.5">
+                <span>Verified by GenLayer consensus</span>
+                <div className="flex items-center gap-2">
+                  <span>ID: {message.verification.verificationId}</span>
+                  {message.verification.transactionHash && (
+                    <span>• Tx: {message.verification.transactionHash.slice(0, 8)}...</span>
+                  )}
+                </div>
               </div>
             </div>
           )}

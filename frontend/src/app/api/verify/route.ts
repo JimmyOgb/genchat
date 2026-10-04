@@ -48,6 +48,30 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (action === "get_text") {
+      if (!verificationId) {
+        return NextResponse.json({ error: "Missing verificationId" }, { status: 400 });
+      }
+
+      const text = await verifier.getVerificationText(verificationId);
+      return NextResponse.json({
+        success: true,
+        text,
+      });
+    }
+
+    if (action === "get_decision") {
+      if (!verificationId) {
+        return NextResponse.json({ error: "Missing verificationId" }, { status: 400 });
+      }
+
+      const decision = await verifier.getVerificationDecision(verificationId);
+      return NextResponse.json({
+        success: true,
+        decision,
+      });
+    }
+
     if (action === "count") {
       const count = await verifier.getVerificationCount();
       return NextResponse.json({

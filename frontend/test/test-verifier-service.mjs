@@ -9,37 +9,49 @@ const client = createClient({
   endpoint: "https://studio.genlayer.com/api",
 });
 
-async function verifyRead() {
+async function verifyUpgradedService() {
+  const verificationId = "v_1791114595811_813838";
+
+  console.log("Testing contract:", contractAddress);
+  console.log("Reading verificationId:", verificationId);
+
+  // 1. Structured read
   const rawData = await client.readContract({
     address: contractAddress,
     functionName: "get_verification",
-    args: ["v_1791108314337_677c44"],
+    args: [verificationId],
   });
-
   const get = (key) => (rawData instanceof Map ? rawData.get(key) : rawData[key]);
 
-  const record = {
-    verificationId: get("verification_id"),
-    requester: get("requester"),
-    questionHash: get("question_hash"),
-    evidenceHash: get("evidence_hash"),
-    questionTitle: get("question_title"),
-    status: get("status"),
-    decision: get("decision"),
-    confidence: Number(get("confidence")),
-    rationale: get("rationale"),
-    createdAt: get("created_at"),
-    finalizedAt: get("finalized_at"),
-  };
+  // 2. Plaintext read
+  const text = await client.readContract({
+    address: contractAddress,
+    functionName: "get_verification_text",
+    args: [verificationId],
+  });
 
-  console.log("PARSED ON-CHAIN RECORD:", JSON.stringify(record, null, 2));
+  // 3. Decision read
+  const decision = await client.readContract({
+    address: contractAddress,
+    functionName: "get_verification_decision",
+    args: [verificationId],
+  });
 
-  if (record.decision === "APPROVED" && record.evidenceHash && record.confidence === 99) {
-    console.log("SUCCESS: On-chain record read & parsed perfectly!");
+  console.log("STRUCTURED DECISION:", get("decision"));
+  console.log("STRUCTURED CONFIDENCE:", Number(get("confidence")));
+  console.log("PLAINTEXT TEXT:", text);
+  console.log("SIMPLE DECISION:", decision);
+
+  if (
+    get("decision") === "APPROVED" &&
+    text.startsWith("APPROVED — 99% confidence.") &&
+    decision === "APPROVED"
+  ) {
+    console.log("\n>>> SUCCESS: All frontend getters read accurately from upgraded contract!");
   } else {
-    console.error("Mismatch in record content");
+    console.error("Mismatch in returned data");
     process.exit(1);
   }
 }
 
-verifyRead();
+verifyUpgradedService();

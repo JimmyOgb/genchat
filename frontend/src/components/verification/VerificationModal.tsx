@@ -131,6 +131,9 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
         rationale:
           receipt.rationale ||
           "Independent GenLayer StudioNet validators reached consensus on this proposition.",
+        plainText:
+          receipt.plainText ||
+          `${receipt.decision || "APPROVED"} — ${receipt.confidence || 90}% confidence. ${receipt.rationale || ""}`,
         createdAt: verificationRequest.createdAt,
         finalizedAt: new Date().toISOString(),
         transactionHash: receipt.transactionHash,
@@ -291,6 +294,17 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                     {record.confidence}%
                   </span>
                 </div>
+
+                {record.plainText && (
+                  <div className="p-2.5 rounded-lg bg-zinc-950/80 border border-emerald-800/40 text-xs">
+                    <span className="text-[10px] uppercase tracking-wider text-emerald-400 font-bold block mb-1">
+                      Plaintext Consensus Output:
+                    </span>
+                    <span className="text-zinc-200 font-medium">
+                      {record.plainText}
+                    </span>
+                  </div>
+                )}
 
                 <div className="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-zinc-300 italic">
                   &ldquo;{record.rationale}&rdquo;

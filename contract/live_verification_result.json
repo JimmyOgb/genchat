@@ -1,36 +1,18 @@
 {
-  "test": "live_studionet_verification",
+  "test": "upgraded_studionet_verification",
   "network": "studionet",
   "chainId": 61999,
-  "contractAddress": "0xf464f7aD5b52e6719dAcE1bb7458F298138b4C55",
-  "verificationId": "v_1791108314337_677c44",
-  "requester": "0x65A2C4dC42A467C3a107AC3D07ED1fB2e0A4F31f",
-  "transactionHash": "0x91757a4f88e0798c364e069efbe368ccd8f0bc1daa4a51971486f4eee1b9cf8d",
-  "explorerUrl": "https://studio.genlayer.com/tx/0x91757a4f88e0798c364e069efbe368ccd8f0bc1daa4a51971486f4eee1b9cf8d",
-  "receiptStatus": "ACCEPTED",
-  "consensusResult": "MAJORITY_AGREE",
-  "validatorVotes": [
-    "AGREE",
-    "AGREE",
-    "AGREE",
-    "IDLE",
-    "IDLE"
-  ],
+  "contractAddress": "0x1b06F421f1d7228aC34f087f37309456D2434344",
+  "verificationId": "v_1791114595811_813838",
+  "transactionHash": "0xd6d46771c46d77eb9425c5393bf075f3bead203b1b8f0ddfba7cddcc2df9c8fd",
+  "explorerUrl": "https://studio.genlayer.com/tx/0xd6d46771c46d77eb9425c5393bf075f3bead203b1b8f0ddfba7cddcc2df9c8fd",
   "decision": "APPROVED",
   "confidence": 99,
-  "rationale": "The document excerpt explicitly states that water boils at approximately 100 degrees Celsius at standard atmospheric pressure (1 atm or 101.325 kPa), directly confirming the claim. This is also a well-established thermodynamic fact with no ambiguity.",
-  "questionTitle": "Water boils at approximately 100 degrees Celsius at standard atmospheric pressure.",
-  "questionHash": "8fcb0e2c685dd558643129a4d4831f03189aa18081b6bea50b6f41994de4a6c9",
-  "evidenceHash": "8786d954b3feff6fc6a3e3ed2aba8035230f955de9e8e9c2874e8276bf33e1ba",
-  "evidenceHashMatchesLocalSha256": true,
-  "questionHashMatchesLocalSha256": true,
-  "submissionToConsensusLatencyMs": 20684,
-  "totalOnChainVerificationsCount": 1,
-  "llmExecutionNode": "0x14402D49f317CE1a2F35BAE01b1804A2A9703dCb",
-  "llmModel": "anthropic/claude-sonnet-4.6",
-  "llmTokens": {
-    "input": 341,
-    "output": 95,
-    "total": 436
-  }
+  "rationale": "The evidence explicitly states that water boils at approximately 100 degrees Celsius at standard atmospheric pressure (1 atm or 101.325 kPa). This directly and unambiguously satisfies the verification criteria.",
+  "plainTextResult": "APPROVED — 99% confidence. The evidence explicitly states that water boils at approximately 100 degrees Celsius at standard atmospheric pressure (1 atm or 101.325 kPa). This directly and unambiguously satisfies the verification criteria.",
+  "decisionResult": "APPROVED",
+  "evidenceHashMatches": true,
+  "questionHashMatches": true,
+  "submissionToConsensusLatencyMs": 24300,
+  "timestamp": "2026-10-04T11:50:20.178Z"
 }

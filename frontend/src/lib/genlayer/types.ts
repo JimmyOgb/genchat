@@ -34,6 +34,7 @@ export interface VerificationRecord {
   decision: VerificationDecision;
   confidence: number;
   rationale: string;
+  plainText?: string;
   createdAt: string;
   finalizedAt: string;
   transactionHash?: string;
@@ -46,5 +47,6 @@ export interface VerificationReceipt {
   decision?: VerificationDecision;
   confidence?: number;
   rationale?: string;
+  plainText?: string;
   error?: string;
 }
