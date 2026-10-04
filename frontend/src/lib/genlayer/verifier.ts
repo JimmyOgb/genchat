@@ -95,26 +95,33 @@ export class GenLayerVerifierService {
     }
 
     const client = getGenLayerClient();
-    const data: any = await client.readContract({
+    const rawData: any = await client.readContract({
       address: this.contractAddress,
       functionName: "get_verification",
       args: [verificationId],
     });
 
-    const decision = (data.decision as VerificationDecision) || "PENDING";
+    const get = (key: string): any => {
+      if (!rawData) return undefined;
+      if (rawData instanceof Map) return rawData.get(key);
+      return rawData[key];
+    };
+
+    const rawDecision = get("decision");
+    const decision = (rawDecision as VerificationDecision) || "PENDING";
 
     return {
-      verificationId: data.verification_id || verificationId,
-      requester: data.requester || "",
-      questionHash: data.question_hash || "",
-      evidenceHash: data.evidence_hash || "",
-      questionTitle: data.question_title || "",
-      status: data.status || "CONSENSUS",
+      verificationId: get("verification_id") || verificationId,
+      requester: get("requester") || "",
+      questionHash: get("question_hash") || "",
+      evidenceHash: get("evidence_hash") || "",
+      questionTitle: get("question_title") || "",
+      status: get("status") || "CONSENSUS",
       decision,
-      confidence: Number(data.confidence || 0),
-      rationale: data.rationale || "",
-      createdAt: data.created_at || "",
-      finalizedAt: data.finalized_at || "",
+      confidence: Number(get("confidence") || 0),
+      rationale: get("rationale") || "",
+      createdAt: get("created_at") || "",
+      finalizedAt: get("finalized_at") || "",
       explorerUrl: getExplorerUrl(),
     };
   }
