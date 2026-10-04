@@ -33,6 +33,12 @@ export default function LandingPage() {
               Verification Ledger
             </Link>
             <Link
+              href="/chat?auth=true"
+              className="text-xs font-medium text-zinc-300 hover:text-zinc-100 transition-colors px-3 py-1.5 rounded-lg border border-zinc-800 hover:bg-zinc-900"
+            >
+              Sign In
+            </Link>
+            <Link
               href="/chat"
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-bold text-xs shadow-lg transition-all"
             >

@@ -1,11 +1,23 @@
 export type VerificationStatus =
   | "IDLE"
+  | "DISCONNECTED"
+  | "CONNECTING"
+  | "CONNECTED"
+  | "WRONG_NETWORK"
+  | "READY"
+  | "AWAITING_WALLET"
+  | "WALLET_SUBMITTED"
   | "PREPARING"
   | "SUBMITTING"
   | "SUBMITTED"
+  | "PROCESSING"
   | "ADJUDICATING"
   | "CONSENSUS"
   | "FINALIZED"
+  | "VERIFIED"
+  | "REJECTED"
+  | "INCONCLUSIVE"
+  | "ERROR"
   | "FAILED";
 
 export type VerificationDecision =

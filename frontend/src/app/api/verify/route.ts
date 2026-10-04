@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GenLayerVerifierService } from "@/lib/genlayer/verifier";
-import { getExplorerUrl } from "@/lib/genlayer/client";
-import type { VerificationRequest } from "@/lib/genlayer/types";
 
 export const runtime = "nodejs";
 
@@ -24,15 +22,29 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "submit") {
-      if (!request) {
-        return NextResponse.json({ error: "Missing verification request" }, { status: 400 });
-      }
+      // The server does NOT hold user wallet keys and cannot sign blockchain transactions.
+      // Honest response explaining that wallet account in the browser is required.
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Wallet account is required to submit a GenLayer verification. Transactions must be signed by the user's connected wallet in the browser.",
+        },
+        { status: 400 }
+      );
+    }
 
-      const receipt = await verifier.submitVerification(request as VerificationRequest);
+    if (action === "prepare") {
+      if (!request) {
+        return NextResponse.json(
+          { success: false, error: "Missing verification request" },
+          { status: 400 }
+        );
+      }
       return NextResponse.json({
         success: true,
-        receipt,
-        explorerUrl: getExplorerUrl(receipt.transactionHash),
+        contractAddress: verifier.getContractAddress(),
+        prepared: true,
       });
     }
 

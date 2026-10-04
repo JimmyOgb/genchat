@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Sidebar, type ConversationSummary } from "@/components/chat/Sidebar";
 import { ChatMessage, type MessageItem } from "@/components/chat/ChatMessage";
 import { Composer } from "@/components/chat/Composer";
@@ -11,7 +11,7 @@ import { SettingsModal } from "@/components/layout/SettingsModal";
 import { AuthModal } from "@/components/layout/AuthModal";
 import type { ExtractedDocument } from "@/lib/documents/extractor";
 import type { VerificationRecord } from "@/lib/genlayer/types";
-import { PanelLeft, Scale } from "lucide-react";
+import { PanelLeft, Scale, User, LogOut } from "lucide-react";
 import Link from "next/link";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
@@ -30,12 +30,13 @@ export default function ChatPage() {
   const [currentMode, setCurrentMode] = useState<ChatMode>("fast");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Modals
+  // Modals & Auth State
   const [verificationModalOpen, setVerificationModalOpen] = useState(false);
   const [targetVerificationMessage, setTargetVerificationMessage] = useState<MessageItem | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -45,31 +46,172 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isStreaming]);
 
-  // Load user session on mount
-  useEffect(() => {
-    if (isSupabaseConfigured()) {
+  // Load conversation messages from Supabase
+  const loadMessages = useCallback(async (convId: string) => {
+    if (!isSupabaseConfigured()) return;
+    try {
       const supabase = createClient();
-      supabase.auth.getUser().then(({ data }) => {
-        if (data.user?.email) {
-          setUserEmail(data.user.email);
-        }
-      });
+      const { data, error } = await supabase
+        .from("messages")
+        .select("id, role, content, metadata, created_at")
+        .eq("conversation_id", convId)
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        console.warn("Could not load messages from Supabase:", error.message);
+        return;
+      }
+
+      if (data) {
+        setMessages(
+          data.map((m: any) => {
+            const meta = (m.metadata as any) || {};
+            return {
+              id: m.id,
+              role: m.role as "user" | "assistant",
+              content: m.content,
+              createdAt: m.created_at,
+              mode: meta.mode,
+              attachedDocuments: meta.attachedDocuments,
+              verification: meta.verification,
+            };
+          })
+        );
+      }
+    } catch (err: any) {
+      console.warn("Error loading messages:", err.message);
     }
   }, []);
 
-  const handleNewChat = () => {
+  // Load conversations list from Supabase
+  const loadConversations = useCallback(async (_uid: string) => {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("conversations")
+        .select("id, title, updated_at, mode")
+        .order("updated_at", { ascending: false });
+
+      if (error) {
+        console.warn("Could not load conversations from Supabase:", error.message);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const mapped: ConversationSummary[] = data.map((c: any) => ({
+          id: c.id,
+          title: c.title,
+          updatedAt: c.updated_at,
+          mode: c.mode,
+        }));
+        setConversations(mapped);
+        setActiveConversationId(mapped[0].id);
+        loadMessages(mapped[0].id);
+      }
+    } catch (err: any) {
+      console.warn("Error loading conversations:", err.message);
+    }
+  }, [loadMessages]);
+
+  // Load user session on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("auth") === "true") {
+        setAuthOpen(true);
+        window.history.replaceState({}, "", "/chat");
+      }
+    }
+
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      supabase.auth.getUser().then(({ data }: any) => {
+        if (data?.user) {
+          setUserEmail(data.user.email ?? null);
+          setUserId(data.user.id);
+          setAuthOpen(false);
+          loadConversations(data.user.id);
+        }
+      });
+
+      const { data: authSubscription } = supabase.auth.onAuthStateChange(
+        (event: any, session: any) => {
+          if (session?.user) {
+            setUserEmail(session.user.email ?? null);
+            setUserId(session.user.id);
+            setAuthOpen(false);
+            loadConversations(session.user.id);
+          } else {
+            setUserEmail(null);
+            setUserId(null);
+            setConversations([
+              {
+                id: "conv-1",
+                title: "New Conversation",
+                updatedAt: new Date().toISOString(),
+                mode: "fast",
+              },
+            ]);
+            setActiveConversationId("conv-1");
+            setMessages([]);
+          }
+        }
+      );
+
+      return () => {
+        authSubscription.subscription.unsubscribe();
+      };
+    } else if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("genchat_local_user");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.email) setUserEmail(parsed.email);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [loadConversations]);
+
+  const handleNewChat = async () => {
     if (isStreaming && abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    const newId = `conv-${Date.now()}`;
+
+    const tempId = `conv-${Date.now()}`;
+    let finalId = tempId;
+
+    if (isSupabaseConfigured() && userId) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("conversations")
+          .insert({
+            user_id: userId,
+            title: "New Conversation",
+            mode: currentMode,
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          finalId = data.id;
+        }
+      } catch (err: any) {
+        console.warn("Failed to create conversation in Supabase:", err.message);
+      }
+    }
+
     const newConv: ConversationSummary = {
-      id: newId,
+      id: finalId,
       title: "New Conversation",
       updatedAt: new Date().toISOString(),
       mode: currentMode,
     };
-    setConversations((prev) => [newConv, ...prev]);
-    setActiveConversationId(newId);
+    setConversations((prev) => [newConv, ...prev.filter((c) => c.id !== finalId)]);
+    setActiveConversationId(finalId);
     setMessages([]);
   };
 
@@ -78,10 +220,25 @@ export default function ChatPage() {
       abortControllerRef.current.abort();
     }
     setActiveConversationId(id);
-    // In production, fetch messages from Supabase or state
+    if (isSupabaseConfigured() && userId) {
+      loadMessages(id);
+    }
   };
 
-  const handleDeleteConversation = (id: string) => {
+  const handleDeleteConversation = async (id: string) => {
+    if (isStreaming && abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    if (isSupabaseConfigured() && userId && !id.startsWith("conv-")) {
+      try {
+        const supabase = createClient();
+        await supabase.from("conversations").delete().eq("id", id);
+      } catch (err: any) {
+        console.warn("Error deleting conversation from Supabase:", err.message);
+      }
+    }
+
     setConversations((prev) => prev.filter((c) => c.id !== id));
     if (activeConversationId === id) {
       handleNewChat();
@@ -129,9 +286,12 @@ export default function ChatPage() {
     setMessages([...updatedMessages, initialAssistantMessage]);
     setIsStreaming(true);
 
-    // Update conversation title if first user message
+    let activeId = activeConversationId;
+    let generatedTitle = "";
+
+    // If first message in conversation, generate title and ensure conversation exists in Supabase
     if (messages.length === 0 && content.trim()) {
-      const generatedTitle = content.slice(0, 32).trim() + "...";
+      generatedTitle = content.slice(0, 32).trim() + "...";
       setConversations((prev) =>
         prev.map((c) =>
           c.id === activeConversationId
@@ -139,6 +299,47 @@ export default function ChatPage() {
             : c
         )
       );
+    }
+
+    // Persist user message to Supabase if authenticated
+    if (isSupabaseConfigured() && userId) {
+      try {
+        const supabase = createClient();
+        if (activeId.startsWith("conv-")) {
+          const { data: newDbConv } = await supabase
+            .from("conversations")
+            .insert({
+              user_id: userId,
+              title: generatedTitle || "New Conversation",
+              mode,
+            })
+            .select()
+            .single();
+
+          if (newDbConv) {
+            activeId = newDbConv.id;
+            setActiveConversationId(activeId);
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === activeConversationId
+                  ? { ...c, id: newDbConv.id, title: newDbConv.title, updatedAt: newDbConv.updated_at }
+                  : c
+              )
+            );
+          }
+        }
+
+        if (!activeId.startsWith("conv-")) {
+          await supabase.from("messages").insert({
+            conversation_id: activeId,
+            role: "user",
+            content,
+            metadata: { mode, attachedDocuments },
+          });
+        }
+      } catch (err: any) {
+        console.warn("Failed to persist user message to Supabase:", err.message);
+      }
     }
 
     // Set up abort controller
@@ -196,6 +397,29 @@ export default function ChatPage() {
             : msg
         )
       );
+
+      // Persist assistant message and update conversation in Supabase
+      if (isSupabaseConfigured() && userId && !activeId.startsWith("conv-")) {
+        try {
+          const supabase = createClient();
+          await supabase.from("messages").insert({
+            conversation_id: activeId,
+            role: "assistant",
+            content: accumulatedResponse,
+            metadata: { mode },
+          });
+
+          await supabase
+            .from("conversations")
+            .update({
+              title: generatedTitle || undefined,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", activeId);
+        } catch (err: any) {
+          console.warn("Failed to persist assistant message to Supabase:", err.message);
+        }
+      }
     } catch (err: any) {
       if (err.name === "AbortError") {
         console.log("Stream aborted by user");
@@ -224,7 +448,7 @@ export default function ChatPage() {
     setVerificationModalOpen(true);
   };
 
-  const handleVerificationComplete = (
+  const handleVerificationComplete = async (
     messageId: string,
     record: VerificationRecord
   ) => {
@@ -233,6 +457,31 @@ export default function ChatPage() {
         msg.id === messageId ? { ...msg, verification: record } : msg
       )
     );
+
+    // Save verification record to Supabase
+    if (isSupabaseConfigured() && userId && !activeConversationId.startsWith("conv-")) {
+      try {
+        const supabase = createClient();
+        await supabase.from("verifications").insert({
+          id: record.verificationId,
+          conversation_id: activeConversationId,
+          user_id: userId,
+          transaction_hash: record.transactionHash,
+          question_title: record.questionTitle,
+          question_hash: record.questionHash,
+          evidence_hash: record.evidenceHash,
+          status: record.status,
+          decision: record.decision,
+          confidence: record.confidence,
+          rationale: record.rationale,
+          explorer_url: record.explorerUrl,
+          created_at: record.createdAt,
+          finalized_at: record.finalizedAt,
+        });
+      } catch (err: any) {
+        console.warn("Failed to persist verification to Supabase:", err.message);
+      }
+    }
   };
 
   return (
@@ -251,7 +500,15 @@ export default function ChatPage() {
           if (isSupabaseConfigured()) {
             createClient().auth.signOut();
           }
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.removeItem("genchat_local_user");
+            } catch {
+              // ignore
+            }
+          }
           setUserEmail(null);
+          setUserId(null);
         }}
         isOpen={sidebarOpen}
         onToggleOpen={() => setSidebarOpen(!sidebarOpen)}
@@ -291,6 +548,45 @@ export default function ChatPage() {
               <Scale className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden sm:inline">Verification Ledger</span>
             </Link>
+
+            {userEmail ? (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300">
+                <User className="w-3.5 h-3.5 text-zinc-400" />
+                <span className="max-w-[120px] truncate font-mono text-[11px] hidden sm:inline">
+                  {userEmail}
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (isSupabaseConfigured()) {
+                      await createClient().auth.signOut();
+                    }
+                    if (typeof window !== "undefined") {
+                      try {
+                        localStorage.removeItem("genchat_local_user");
+                      } catch {
+                        // ignore
+                      }
+                    }
+                    setUserEmail(null);
+                    setUserId(null);
+                  }}
+                  className="text-zinc-500 hover:text-zinc-300 ml-1 p-0.5"
+                  title="Sign out"
+                >
+                  <LogOut className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAuthOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors"
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -364,7 +660,10 @@ export default function ChatPage() {
       <AuthModal
         isOpen={authOpen}
         onClose={() => setAuthOpen(false)}
-        onSuccess={(email) => setUserEmail(email)}
+        onSuccess={(email) => {
+          setUserEmail(email);
+          setAuthOpen(false);
+        }}
       />
     </div>
   );

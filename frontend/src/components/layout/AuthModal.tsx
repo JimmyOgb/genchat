@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Lock, Mail, Loader2, AlertCircle, Sparkles } from "lucide-react";
+import { X, Lock, Mail, Loader2, Sparkles, Info } from "lucide-react";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 interface AuthModalProps {
@@ -19,43 +19,59 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
 
   if (!isOpen) return null;
 
+  const isRemoteAuthConfigured = isSupabaseConfigured();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-
-    if (!isSupabaseConfigured()) {
-      setError(
-        "Supabase is not configured yet. Please configure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your environment variables to enable user accounts."
-      );
-      return;
-    }
-
     setLoading(true);
-    try {
-      const supabase = createClient();
 
-      if (isSignUp) {
-        const { data, error: signUpErr } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (signUpErr) throw signUpErr;
-        if (data.user?.email) {
-          onSuccess(data.user.email);
-          onClose();
+    try {
+      if (isRemoteAuthConfigured) {
+        const supabase = createClient();
+
+        if (isSignUp) {
+          const { data, error: signUpErr } = await supabase.auth.signUp({
+            email,
+            password,
+          });
+          if (signUpErr) throw signUpErr;
+          if (data.user?.email) {
+            onSuccess(data.user.email);
+            onClose();
+          }
+        } else {
+          const { data, error: signInErr } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (signInErr) throw signInErr;
+          if (data.user?.email) {
+            onSuccess(data.user.email);
+            onClose();
+          }
         }
       } else {
-        const { data, error: signInErr } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (signInErr) throw signInErr;
-        if (data.user?.email) {
-          onSuccess(data.user.email);
-          onClose();
+        // Local offline / development authentication
+        if (!email.includes("@")) {
+          throw new Error("Please enter a valid email address.");
         }
+        if (password.length < 4) {
+          throw new Error("Password must be at least 4 characters.");
+        }
+
+        // Store in localStorage for session persistence across page reloads
+        try {
+          localStorage.setItem("genchat_local_user", JSON.stringify({ email }));
+        } catch {
+          // ignore localStorage error
+        }
+
+        onSuccess(email);
+        onClose();
       }
     } catch (err: any) {
+      console.error("[AuthModal error]:", err.message || err);
       setError(err.message || "Authentication failed. Please check your credentials.");
     } finally {
       setLoading(false);
@@ -66,13 +82,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
       <div className="relative w-full max-w-sm rounded-2xl bg-zinc-950 border border-zinc-800 p-6 shadow-2xl space-y-5 text-zinc-200">
         <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs">
-              <Sparkles className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs">
+              <Sparkles className="w-4 h-4" />
             </div>
-            <h2 className="text-sm font-bold tracking-tight text-zinc-100">
-              {isSignUp ? "Create GenChat Account" : "Sign In to GenChat"}
-            </h2>
+            <div>
+              <h2 className="text-sm font-bold tracking-tight text-zinc-100">
+                {isSignUp ? "Create GenChat Account" : "Sign In to GenChat"}
+              </h2>
+              <span className="text-[10px] text-zinc-400 block font-medium">
+                {isRemoteAuthConfigured ? "Supabase Cloud authentication" : "Local development session mode"}
+              </span>
+            </div>
           </div>
           <button
             type="button"
@@ -83,9 +104,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
           </button>
         </div>
 
+        {!isRemoteAuthConfigured && (
+          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-start gap-2">
+            <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-[11px] leading-relaxed">
+              Local session mode. Sign in with any email and password. No wallet required.
+            </p>
+          </div>
+        )}
+
         {error && (
           <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-xs text-rose-300 flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
             <p className="text-[11px] leading-relaxed">{error}</p>
           </div>
         )}
@@ -113,7 +142,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={4}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"

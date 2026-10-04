@@ -1,21 +1,35 @@
+import { getAddress, isAddress } from "viem";
 import { getContractAddress, getExplorerUrl, getGenLayerClient } from "./client";
 import type {
   VerificationDecision,
   VerificationReceipt,
   VerificationRecord,
   VerificationRequest,
+  VerificationStatus,
 } from "./types";
 
 export class GenLayerVerifierService {
   private contractAddress: `0x${string}`;
 
   constructor(contractAddress?: string) {
-    const addr = contractAddress || getContractAddress();
-    this.contractAddress = addr as `0x${string}`;
+    if (contractAddress) {
+      if (!isAddress(contractAddress, { strict: false })) {
+        throw new Error(
+          `Invalid contract address provided to GenLayerVerifierService: "${contractAddress}". Must be a valid 20-byte Ethereum address.`
+        );
+      }
+      this.contractAddress = getAddress(contractAddress);
+    } else {
+      this.contractAddress = getContractAddress();
+    }
+  }
+
+  getContractAddress(): `0x${string}` {
+    return this.contractAddress;
   }
 
   isConfigured(): boolean {
-    return !!this.contractAddress && this.contractAddress.length > 5;
+    return !!this.contractAddress && isAddress(this.contractAddress, { strict: false });
   }
 
   /**
@@ -24,19 +38,33 @@ export class GenLayerVerifierService {
    */
   async submitVerification(
     request: VerificationRequest,
-    senderAddress?: string
+    senderAddress?: string,
+    onProgress?: (status: VerificationStatus, message: string, txHash?: string) => void
   ): Promise<VerificationReceipt> {
     if (!this.isConfigured()) {
       throw new Error(
-        "GENCHAT_CONTRACT_ADDRESS is not set. Please deploy the contract to StudioNet and set GENCHAT_CONTRACT_ADDRESS in .env.local."
+        "GENCHAT_CONTRACT_ADDRESS is not set. Please deploy the contract to StudioNet and set NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS in .env.local."
       );
     }
 
-    const client = getGenLayerClient(senderAddress);
+    if (!senderAddress || !isAddress(senderAddress, { strict: false })) {
+      throw new Error(
+        `Valid wallet account is required to submit a GenLayer verification. Received: "${senderAddress}"`
+      );
+    }
+
+    const checksummedSender = getAddress(senderAddress);
+    const client = getGenLayerClient(checksummedSender);
 
     try {
-      // 1. Submit write transaction to the intelligent contract
+      onProgress?.(
+        "AWAITING_WALLET",
+        "Confirm the verification transaction in your wallet."
+      );
+
+      // 1. Submit write transaction to the intelligent contract using connected user account via browser wallet
       const txHash = await client.writeContract({
+        account: client.account,
         address: this.contractAddress,
         functionName: "request_verification",
         args: [
@@ -51,24 +79,83 @@ export class GenLayerVerifierService {
         value: BigInt(0),
       });
 
-      // 2. Poll for network receipt (ACCEPTED/FINALIZED consensus)
-      await this.waitForVerification(txHash);
+      onProgress?.(
+        "WALLET_SUBMITTED",
+        "Transaction confirmed in wallet. Submitting to StudioNet...",
+        txHash
+      );
 
-      // 3. Query the finalized on-chain state for consensus decision & plaintext
-      let decision: VerificationDecision = "APPROVED";
-      let confidence = 90;
-      let rationale = "Consensus achieved on GenLayer StudioNet.";
+      onProgress?.(
+        "PROCESSING",
+        "GenLayer is processing your verification...",
+        txHash
+      );
+
+      onProgress?.(
+        "CONSENSUS",
+        "GenLayer validators are reaching consensus...",
+        txHash
+      );
+
+      // 2. Poll for network receipt (ACCEPTED/FINALIZED consensus)
+      const receipt = await this.waitForVerification(txHash);
+
+      // Check consensus outcome
+      const statusNum = Number(receipt?.status);
+      const statusName = String(receipt?.statusName || "");
+      const resultName = String(receipt?.result_name || receipt?.result || "");
+
+      if (statusNum === 8 || statusName === "CANCELED") {
+        throw new Error("GenLayer processing failure: Transaction was cancelled.");
+      }
+      if (statusNum === 12 || statusName === "VALIDATORS_TIMEOUT") {
+        throw new Error("Consensus failure: Validator timeout occurred.");
+      }
+      if (statusNum === 13 || statusName === "LEADER_TIMEOUT") {
+        throw new Error("Consensus failure: Leader timeout occurred.");
+      }
+      if (statusNum === 6 || statusName === "UNDETERMINED") {
+        throw new Error("Consensus failure: GenLayer validators could not reach determinism.");
+      }
+      if (resultName === "FAILURE" || resultName === "DETERMINISTIC_VIOLATION") {
+        throw new Error(`Consensus failure: Consensus result was ${resultName}.`);
+      }
+
+      onProgress?.(
+        "FINALIZED",
+        "Verification finalized on GenLayer.",
+        txHash
+      );
+
+      // 3. Query the finalized on-chain state for real consensus decision & plaintext
+      let decision: VerificationDecision = "INCONCLUSIVE";
+      let confidence = 0;
+      let rationale = "";
       let plainText = "";
 
       try {
         const record = await this.getVerificationRecord(request.verificationId);
-        decision = record.decision;
-        confidence = record.confidence;
-        rationale = record.rationale;
+        decision = record.decision || "INCONCLUSIVE";
+        confidence = record.confidence ?? 0;
+        rationale = record.rationale || "";
         plainText = record.plainText || `${decision} — ${confidence}% confidence. ${rationale}`;
-      } catch (readErr) {
+      } catch (readErr: any) {
         console.warn("Could not read back immediate record state:", readErr);
-        plainText = `${decision} — ${confidence}% confidence. ${rationale}`;
+        try {
+          plainText = await this.getVerificationText(request.verificationId);
+          decision = await this.getVerificationDecision(request.verificationId);
+          rationale = plainText;
+        } catch {
+          throw new Error("Finalization failure: Could not retrieve final verification record from GenLayer contract.");
+        }
+      }
+
+      if (decision === "APPROVED") {
+        onProgress?.("VERIFIED", "Verification confirmed on-chain.", txHash);
+      } else if (decision === "REJECTED") {
+        onProgress?.("REJECTED", "Verification rejected by validators on-chain.", txHash);
+      } else {
+        onProgress?.("INCONCLUSIVE", "Verification inconclusive on-chain.", txHash);
       }
 
       return {
@@ -81,7 +168,10 @@ export class GenLayerVerifierService {
       };
     } catch (err: any) {
       console.error("GenLayer transaction error:", err);
-      throw new Error(err.message || "Failed to execute GenLayer verification transaction.");
+      if (err.code === 4001 || /reject|denied|cancelled|user rejected/i.test(err.message)) {
+        throw new Error("User rejected the verification transaction in your wallet.");
+      }
+      throw err;
     }
   }
 
