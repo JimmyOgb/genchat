@@ -34,7 +34,7 @@ export class GenLayerVerifierService {
 
   /**
    * Submits a real verification request transaction to GenLayer StudioNet.
-   * Runs independent AI validator consensus on-chain.
+   * Runs independent AI validator consensus with source retrieval & content hash binding.
    */
   async submitVerification(
     request: VerificationRequest,
@@ -71,9 +71,10 @@ export class GenLayerVerifierService {
           request.verificationId,
           request.questionTitle,
           request.questionHash,
-          request.evidenceHash,
-          request.contextSummary,
+          request.expectedEvidenceHash,
+          JSON.stringify(request.sourceUrls),
           request.criteria,
+          request.userContextSummary,
           request.createdAt,
         ],
         value: BigInt(0),
@@ -87,13 +88,13 @@ export class GenLayerVerifierService {
 
       onProgress?.(
         "PROCESSING",
-        "GenLayer is processing your verification...",
+        "GenLayer validators are independently retrieving external source evidence...",
         txHash
       );
 
       onProgress?.(
         "CONSENSUS",
-        "GenLayer validators are reaching consensus...",
+        "GenLayer validators are verifying canonical hashes and reaching consensus...",
         txHash
       );
 
@@ -132,12 +133,16 @@ export class GenLayerVerifierService {
       let confidence = 0;
       let rationale = "";
       let plainText = "";
+      let evidenceVerified = false;
+      let actualEvidenceHash = "";
 
       try {
         const record = await this.getVerificationRecord(request.verificationId);
         decision = record.decision || "INCONCLUSIVE";
         confidence = record.confidence ?? 0;
         rationale = record.rationale || "";
+        evidenceVerified = record.evidenceVerified;
+        actualEvidenceHash = record.actualEvidenceHash;
         plainText = record.plainText || `${decision} — ${confidence}% confidence. ${rationale}`;
       } catch (readErr: any) {
         console.warn("Could not read back immediate record state:", readErr);
@@ -151,7 +156,7 @@ export class GenLayerVerifierService {
       }
 
       if (decision === "APPROVED") {
-        onProgress?.("VERIFIED", "Verification confirmed on-chain.", txHash);
+        onProgress?.("VERIFIED", "Verification confirmed on-chain (Evidence Verified).", txHash);
       } else if (decision === "REJECTED") {
         onProgress?.("REJECTED", "Verification rejected by validators on-chain.", txHash);
       } else {
@@ -164,6 +169,8 @@ export class GenLayerVerifierService {
         decision,
         confidence,
         rationale,
+        evidenceVerified,
+        actualEvidenceHash,
         plainText,
       };
     } catch (err: any) {
@@ -213,6 +220,15 @@ export class GenLayerVerifierService {
     const decision = (rawDecision as VerificationDecision) || "PENDING";
     const confidence = Number(get("confidence") || 0);
     const rationale = get("rationale") || "";
+    const evidenceVerified = Boolean(get("evidence_verified"));
+    const actualEvidenceHash = get("actual_evidence_hash") || "";
+    const expectedEvidenceHash = get("expected_evidence_hash") || "";
+    let sourceUrls: string[] = [];
+    try {
+      sourceUrls = JSON.parse(get("source_urls_json") || "[]");
+    } catch {
+      sourceUrls = [];
+    }
 
     // Fetch plaintext directly from contract's dedicated public view method
     let plainText = `${decision} — ${confidence}% confidence. ${rationale}`;
@@ -225,13 +241,17 @@ export class GenLayerVerifierService {
     return {
       verificationId: get("verification_id") || verificationId,
       requester: get("requester") || "",
-      questionHash: get("question_hash") || "",
-      evidenceHash: get("evidence_hash") || "",
       questionTitle: get("question_title") || "",
+      questionHash: get("question_hash") || "",
+      expectedEvidenceHash,
+      actualEvidenceHash,
+      sourceUrls,
+      evidenceVerified,
       status: get("status") || "CONSENSUS",
       decision,
       confidence,
       rationale,
+      userContextSummary: get("user_context_summary") || "",
       plainText,
       createdAt: get("created_at") || "",
       finalizedAt: get("finalized_at") || "",
@@ -241,7 +261,7 @@ export class GenLayerVerifierService {
 
   /**
    * Reads human-readable plaintext verification string from the contract.
-   * Format: "<DECISION> — <CONFIDENCE>% confidence. <RATIONALE>"
+   * Format: "<DECISION> — <CONFIDENCE>% confidence. [Evidence: VERIFIED/UNVERIFIED] <RATIONALE>"
    */
   async getVerificationText(verificationId: string): Promise<string> {
     if (!this.isConfigured()) {

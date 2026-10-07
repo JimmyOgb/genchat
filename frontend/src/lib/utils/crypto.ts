@@ -1,7 +1,19 @@
 /**
- * Deterministic SHA-256 Hashing for Evidence and Questions
+ * Deterministic Evidence Canonicalization and SHA-256 Hashing
  * Works seamlessly in both browser and Node.js server environments.
+ * Shared exact algorithm with GenChatVerifier smart contract.
  */
+
+export function canonicalizeEvidence(raw: string): string {
+  if (!raw) return "";
+  return raw
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim()
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n");
+}
 
 export async function sha256Hex(data: string | Uint8Array): Promise<string> {
   if (typeof window !== "undefined" && window.crypto?.subtle) {
@@ -16,6 +28,12 @@ export async function sha256Hex(data: string | Uint8Array): Promise<string> {
     hash.update(data);
     return "0x" + hash.digest("hex");
   }
+}
+
+export async function computeCanonicalEvidenceHash(rawContent: string): Promise<string> {
+  const canonical = canonicalizeEvidence(rawContent);
+  const hash = await sha256Hex(canonical);
+  return hash.toLowerCase();
 }
 
 /**

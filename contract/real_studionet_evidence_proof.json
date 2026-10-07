@@ -1,0 +1,25 @@
+{
+  "test": "real_studionet_evidence_verification",
+  "network": "studionet",
+  "chainId": 61999,
+  "contractAddress": "0x02DF9f0Cd7abF48Dea426725567b03032a65651A",
+  "walletAddress": "0x7d1eB78811C0FD4374e21152A51E4d7Ea95dFcEa",
+  "verificationId": "v_1791352846702_c2ea0c",
+  "transactionHash": "0x45f19d4777fc7fda24f0f01f06c8b64291cee6f6a3e082135c624e0a58d1c092",
+  "explorerUrl": "https://studio.genlayer.com/tx/0x45f19d4777fc7fda24f0f01f06c8b64291cee6f6a3e082135c624e0a58d1c092",
+  "sourceUrl": "https://raw.githubusercontent.com/ethereum/EIPs/master/EIPS/eip-1.md",
+  "sourceUrls": [
+    "https://raw.githubusercontent.com/ethereum/EIPs/master/EIPS/eip-1.md"
+  ],
+  "expectedEvidenceHash": "0xad42acaf7e1139ce648a9c5561d1e00e777faf848941e9ee50c3f69792882122",
+  "actualEvidenceHash": "0xad42acaf7e1139ce648a9c5561d1e00e777faf848941e9ee50c3f69792882122",
+  "evidenceVerified": true,
+  "decision": "APPROVED",
+  "confidence": 100,
+  "rationale": "The source explicitly states \"EIP stands for Ethereum Improvement Proposal\" in the definition section.",
+  "plainTextResult": "APPROVED — 100% confidence. [Evidence: VERIFIED] The source explicitly states \"EIP stands for Ethereum Improvement Proposal\" in the definition section.",
+  "decisionResult": "APPROVED",
+  "submissionTimestamp": "2026-10-07T06:00:46.703Z",
+  "latencyMs": 26530,
+  "timestamp": "2026-10-07T06:01:13.522Z"
+}

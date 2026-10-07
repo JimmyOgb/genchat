@@ -1,5 +1,5 @@
 -- GenChat Supabase PostgreSQL Schema & Row Level Security (RLS)
--- Enables secure, authenticated conversation persistence and verification tracking.
+-- Enables secure, authenticated conversation persistence and verification tracking with verifiable evidence path.
 
 -- 1. Enable UUID Extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS public.messages (
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_created 
     ON public.messages(conversation_id, created_at ASC);
 
--- 4. Verifications Table (On-chain reference tracking)
+-- 4. Verifications Table (On-chain reference tracking with evidence provenance)
 CREATE TABLE IF NOT EXISTS public.verifications (
     id TEXT PRIMARY KEY, -- Unique verification ID matching on-chain ID
     conversation_id UUID REFERENCES public.conversations(id) ON DELETE SET NULL,
@@ -41,7 +41,11 @@ CREATE TABLE IF NOT EXISTS public.verifications (
     transaction_hash TEXT,
     question_title TEXT NOT NULL,
     question_hash TEXT NOT NULL,
-    evidence_hash TEXT NOT NULL,
+    expected_evidence_hash TEXT NOT NULL,
+    actual_evidence_hash TEXT,
+    source_urls JSONB DEFAULT '[]'::jsonb,
+    evidence_verified BOOLEAN DEFAULT FALSE,
+    user_context_summary TEXT,
     status TEXT NOT NULL DEFAULT 'SUBMITTED' CHECK (status IN ('SUBMITTED', 'ADJUDICATING', 'CONSENSUS', 'FAILED')),
     decision TEXT NOT NULL DEFAULT 'PENDING' CHECK (decision IN ('PENDING', 'APPROVED', 'REJECTED', 'INCONCLUSIVE')),
     confidence INTEGER DEFAULT 0,

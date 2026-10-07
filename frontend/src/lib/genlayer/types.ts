@@ -30,22 +30,27 @@ export interface VerificationRequest {
   verificationId: string;
   questionTitle: string;
   questionHash: string;
-  evidenceHash: string;
-  contextSummary: string;
+  expectedEvidenceHash: string;
+  sourceUrls: string[];
   criteria: string;
+  userContextSummary: string;
   createdAt: string;
 }
 
 export interface VerificationRecord {
   verificationId: string;
   requester: string;
-  questionHash: string;
-  evidenceHash: string;
   questionTitle: string;
+  questionHash: string;
+  expectedEvidenceHash: string;
+  actualEvidenceHash: string;
+  sourceUrls: string[];
+  evidenceVerified: boolean;
   status: string;
   decision: VerificationDecision;
   confidence: number;
   rationale: string;
+  userContextSummary?: string;
   plainText?: string;
   createdAt: string;
   finalizedAt: string;
@@ -59,6 +64,8 @@ export interface VerificationReceipt {
   decision?: VerificationDecision;
   confidence?: number;
   rationale?: string;
+  evidenceVerified?: boolean;
+  actualEvidenceHash?: string;
   plainText?: string;
   error?: string;
 }

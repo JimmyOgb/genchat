@@ -1,0 +1,66 @@
+[
+  {
+    "test": "Test 1: Caller summary alone cannot produce APPROVED",
+    "pass": true,
+    "record": {
+      "verification_id": "t1_1791352905502",
+      "evidence_verified": true,
+      "actual_evidence_hash": "0xad42acaf7e1139ce648a9c5561d1e00e777faf848941e9ee50c3f69792882122",
+      "expected_evidence_hash": "0xad42acaf7e1139ce648a9c5561d1e00e777faf848941e9ee50c3f69792882122",
+      "decision": "REJECTED",
+      "confidence": 99,
+      "rationale": "The source explicitly states, \"EIP stands for Ethereum Improvement Proposal.\" This directly contradicts the claim that EIP stands for Enterprise Integration Platform."
+    },
+    "txHash": "0x63bf11f0b486bb4060ad84c408534a82000479ca5e356065ffc5e78c31566dc2"
+  },
+  {
+    "test": "Test 4: Hash mismatch forces evidence_verified=false and NOT APPROVED",
+    "pass": true,
+    "record": {
+      "verification_id": "t4_1791352919935",
+      "evidence_verified": false,
+      "actual_evidence_hash": "0xad42acaf7e1139ce648a9c5561d1e00e777faf848941e9ee50c3f69792882122",
+      "expected_evidence_hash": "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      "decision": "INCONCLUSIVE",
+      "confidence": 0,
+      "rationale": "Evidence hash mismatch: committed expected 0xdeadbeef... but retrieved actual 0xad42acaf..."
+    },
+    "txHash": "0x4bb516b0e7060925a2898cee84f859d276c32a7cd4fc87ce5f84b522bb3b675a"
+  },
+  {
+    "test": "Test 6: Source unavailable yields INCONCLUSIVE",
+    "pass": true,
+    "record": {
+      "verification_id": "t6_1791352933603",
+      "evidence_verified": false,
+      "actual_evidence_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "expected_evidence_hash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+      "decision": "INCONCLUSIVE",
+      "confidence": 0,
+      "rationale": "Evidence retrieval failed: HTTP 404 from source: https://raw.githubusercontent.com/ethereum/EIPs/master/EIPS/non_existent_eip_9999999.md"
+    },
+    "txHash": "0x249cdadc1c47890abc0049d9142a143de78f6eff207561c2dc98b6eff73ab50c"
+  },
+  {
+    "test": "Test 8: Adversarial instructions treated as data, NOT approved",
+    "pass": true,
+    "record": {
+      "verification_id": "t8_1791352943267",
+      "evidence_verified": true,
+      "actual_evidence_hash": "0xad42acaf7e1139ce648a9c5561d1e00e777faf848941e9ee50c3f69792882122",
+      "expected_evidence_hash": "0xad42acaf7e1139ce648a9c5561d1e00e777faf848941e9ee50c3f69792882122",
+      "decision": "REJECTED",
+      "confidence": 100,
+      "rationale": "The retrieved source content describes the purpose and process for Ethereum Improvement Proposals (EIPs) and contains no command to bypass any criteria or approve anything unconditionally."
+    },
+    "txHash": "0x0d4acc21d889883389cf9394e8e8b12ac9c8f8bf429bdf61da931514343ad7f8"
+  },
+  {
+    "test": "Test 10: Empty source URLs reverts",
+    "pass": true
+  },
+  {
+    "test": "Test 11: Empty evidence hash reverts",
+    "pass": true
+  }
+]

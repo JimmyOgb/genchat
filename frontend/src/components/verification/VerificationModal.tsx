@@ -8,13 +8,15 @@ import {
   AlertCircle,
   ExternalLink,
   Loader2,
-  FileCheck2,
   Cpu,
   CheckCircle2,
   XCircle,
   HelpCircle,
   Wallet,
   ArrowRightLeft,
+  Globe,
+  Hash,
+  Info,
 } from "lucide-react";
 import type { MessageItem } from "../chat/ChatMessage";
 import { sha256Hex, generateVerificationId } from "@/lib/utils/crypto";
@@ -64,13 +66,28 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false);
 
+  // New Evidence Verification Architecture Fields
+  const [sourceUrl, setSourceUrl] = useState("https://raw.githubusercontent.com/ethereum/EIPs/master/EIPS/eip-1.md");
+  const [secondaryUrl, setSecondaryUrl] = useState("");
+  const [criteria, setCriteria] = useState(
+    "Independently verify whether the referenced source document unequivocally supports the claim. Decide APPROVED if fully supported, REJECTED if contradicted, or INCONCLUSIVE if ambiguous or unverified."
+  );
+  const [userDescription, setUserDescription] = useState("");
+  const [expectedHashCommitment, setExpectedHashCommitment] = useState("0xad42acaf7e1139ce648a9c5561d1e00e777faf848941e9ee50c3f69792882122");
+
   const statusRef = React.useRef(status);
   statusRef.current = status;
+
+  // Initialize fields from message when opened
+  useEffect(() => {
+    if (message) {
+      setUserDescription(message.content.slice(0, 500));
+    }
+  }, [message]);
 
   // Check existing wallet connection and chain passively (never prompt on modal open)
   useEffect(() => {
     if (!isOpen) {
-      // Reset state on close
       setStatus("IDLE");
       setStatusMessage("");
       setErrorMessage(null);
@@ -129,7 +146,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
   if (!isOpen || !message) return null;
 
   const questionTitle =
-    message.content.split("\n")[0].substring(0, 150) || "GenChat Verification";
+    message.content.split("\n")[0].substring(0, 150) || "GenChat Evidence Verification";
 
   const isOnStudioNet = isStudioNet(connectedChainId);
 
@@ -205,28 +222,32 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
       return;
     }
 
+    const cleanSourceUrl = sourceUrl.trim();
+    if (!cleanSourceUrl || !cleanSourceUrl.startsWith("http")) {
+      setErrorMessage("A valid public HTTP/HTTPS Evidence Source URL is required. GenLayer validators must independently retrieve this source.");
+      return;
+    }
+
+    const sourceUrls = [cleanSourceUrl];
+    if (secondaryUrl.trim() && secondaryUrl.trim().startsWith("http")) {
+      sourceUrls.push(secondaryUrl.trim());
+    }
+
     setStatus("PREPARING");
-    setStatusMessage("Calculating deterministic evidence hashes and packaging criteria...");
+    setStatusMessage("Packaging source URLs, cryptographic commitment hash, and criteria...");
 
     try {
       const verificationId = generateVerificationId();
-
-      // Deterministic hashes
       const questionHash = await sha256Hex(questionTitle);
-      const evidencePayload =
-        (message.attachedDocuments || [])
-          .map((d) => `${d.fileName}:${d.evidenceHash}`)
-          .join(";") || `analysis-content:${message.content}`;
-      const evidenceHash = await sha256Hex(evidencePayload);
 
       const verificationRequest: VerificationRequest = {
         verificationId,
         questionTitle,
         questionHash,
-        evidenceHash,
-        contextSummary: message.content.slice(0, 2000),
-        criteria:
-          "Independently verify if the claim or action is unequivocally supported (APPROVED), clearly contradicted (REJECTED), or uncertain/insufficient (INCONCLUSIVE).",
+        expectedEvidenceHash: expectedHashCommitment.trim().toLowerCase(),
+        sourceUrls,
+        criteria: criteria.trim(),
+        userContextSummary: userDescription.trim() || message.content.slice(0, 1000),
         createdAt: new Date().toISOString(),
       };
 
@@ -251,18 +272,18 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
       const verifiedRecord: VerificationRecord = {
         verificationId,
         requester: userAddress,
-        questionHash,
-        evidenceHash,
         questionTitle,
+        questionHash,
+        expectedEvidenceHash: verificationRequest.expectedEvidenceHash,
+        actualEvidenceHash: receipt.actualEvidenceHash || "",
+        sourceUrls,
+        evidenceVerified: Boolean(receipt.evidenceVerified),
         status: "CONSENSUS",
         decision: (receipt.decision as VerificationDecision) || "APPROVED",
         confidence: receipt.confidence || 90,
-        rationale:
-          receipt.rationale ||
-          "Independent GenLayer StudioNet validators reached consensus on this proposition.",
-        plainText:
-          receipt.plainText ||
-          `${receipt.decision || "APPROVED"} — ${receipt.confidence || 90}% confidence. ${receipt.rationale || ""}`,
+        rationale: receipt.rationale || "GenLayer validators independently verified source evidence and reached consensus.",
+        userContextSummary: verificationRequest.userContextSummary,
+        plainText: receipt.plainText,
         createdAt: verificationRequest.createdAt,
         finalizedAt: new Date().toISOString(),
         transactionHash: receipt.transactionHash,
@@ -280,15 +301,6 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
       if (err.code === 4001 || /reject|denied|cancel/i.test(msg)) {
         setStatus("IDLE");
         setErrorMessage("User rejected transaction in wallet.");
-      } else if (msg.includes("Consensus failure")) {
-        setStatus("FAILED");
-        setErrorMessage(msg);
-      } else if (msg.includes("GenLayer processing failure")) {
-        setStatus("FAILED");
-        setErrorMessage(msg);
-      } else if (msg.includes("Finalization failure")) {
-        setStatus("FAILED");
-        setErrorMessage(msg);
       } else {
         setStatus("FAILED");
         setErrorMessage(msg || "GenLayer transaction submission failed.");
@@ -334,13 +346,13 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold tracking-tight text-zinc-100 flex items-center gap-2">
-                GenLayer Independent Verification
+                GenLayer Verifiable Evidence Consensus
                 <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-amber-400 font-mono">
                   StudioNet
                 </span>
               </h2>
               <p className="text-[11px] text-zinc-400">
-                Decentralized validator consensus for high-impact decisions
+                Validators independently retrieve external source evidence & verify content hash binding
               </p>
             </div>
           </div>
@@ -354,43 +366,78 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
           </button>
         </div>
 
-        {/* Decision Under Review */}
+        {/* Notice of Trust Model */}
+        <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-800/50 text-[11px] text-blue-200 flex items-start gap-2.5">
+          <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+          <p className="leading-relaxed">
+            <span className="font-semibold text-blue-300">Trust Boundary:</span> GenLayer validators independently retrieve the referenced evidence URL(s). User summaries are treated as non-authoritative descriptions and cannot produce an APPROVED verdict on their own.
+          </p>
+        </div>
+
+        {/* Claim Under Review */}
         <div className="space-y-1.5 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/80 text-xs">
           <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-            Decision Under Review
+            Claim / Question to Verify
           </span>
           <p className="font-medium text-zinc-200 line-clamp-2 leading-relaxed">
             {questionTitle}
           </p>
         </div>
 
-        {/* Evidence Verification */}
-        <div className="space-y-2">
-          <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
-            Evidence & Document Hashes (Off-Chain)
-          </span>
-          <div className="space-y-1.5">
-            {message.attachedDocuments && message.attachedDocuments.length > 0 ? (
-              message.attachedDocuments.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center justify-between p-2 rounded-lg bg-zinc-900 border border-zinc-800/80 text-xs"
-                >
-                  <div className="flex items-center gap-2">
-                    <FileCheck2 className="w-4 h-4 text-emerald-400" />
-                    <span className="font-medium text-zinc-200">{doc.fileName}</span>
-                  </div>
-                  <span className="font-mono text-[10px] text-zinc-500">
-                    {doc.evidenceHash.substring(0, 16)}...
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-400 flex items-center justify-between">
-                <span>Conversation Analysis & Criteria Context</span>
-                <span className="font-mono text-[10px] text-zinc-500">SHA-256 Verified</span>
-              </div>
-            )}
+        {/* Evidence Source URL(s) Inputs */}
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-amber-400" />
+              Evidence Source URL (Validators Retrieve Directly)
+            </label>
+            <input
+              type="url"
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+              placeholder="https://raw.githubusercontent.com/... or public web source"
+              className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 font-mono focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-zinc-500" />
+              Optional Secondary Source URL
+            </label>
+            <input
+              type="url"
+              value={secondaryUrl}
+              onChange={(e) => setSecondaryUrl(e.target.value)}
+              placeholder="https://... (Optional secondary independent source)"
+              className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 font-mono focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Hash className="w-3.5 h-3.5 text-amber-400" />
+              Expected Source Content Hash Commitment (SHA-256)
+            </label>
+            <input
+              type="text"
+              value={expectedHashCommitment}
+              onChange={(e) => setExpectedHashCommitment(e.target.value)}
+              placeholder="0x... (Canonical source content hash)"
+              className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 font-mono focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+              Verification Criteria
+            </label>
+            <textarea
+              rows={2}
+              value={criteria}
+              onChange={(e) => setCriteria(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 focus:outline-none focus:border-amber-500"
+            />
           </div>
         </div>
 
@@ -511,17 +558,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 <AlertCircle className="w-5 h-5 text-rose-400" />
               )}
               <span className="text-xs text-zinc-300">
-                {status === "AWAITING_WALLET"
-                  ? "Confirm the verification transaction in your wallet."
-                  : status === "PROCESSING"
-                  ? "GenLayer is processing your verification..."
-                  : status === "CONSENSUS"
-                  ? "GenLayer validators are reaching consensus..."
-                  : status === "FINALIZED"
-                  ? "Verification finalized on GenLayer."
-                  : status === "VERIFIED"
-                  ? "Verification confirmed on-chain."
-                  : statusMessage}
+                {statusMessage}
               </span>
             </div>
 
@@ -537,6 +574,20 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-zinc-400">Consensus Decision:</span>
                   {getDecisionBadge(record.decision)}
+                </div>
+
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-400">Evidence Verified by Validators:</span>
+                  <span className={`font-semibold ${record.evidenceVerified ? "text-emerald-400" : "text-amber-400"}`}>
+                    {record.evidenceVerified ? "YES (Hash Matched)" : "NO (Unverified / Mismatched)"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-400">Actual Retrieved Evidence Hash:</span>
+                  <span className="font-mono text-[11px] text-zinc-300">
+                    {record.actualEvidenceHash ? `${record.actualEvidenceHash.slice(0, 14)}...` : "None"}
+                  </span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs">

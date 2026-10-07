@@ -13,6 +13,7 @@ import {
   Cpu,
   RefreshCw,
   Hash,
+  Globe,
 } from "lucide-react";
 import type { VerificationRecord } from "@/lib/genlayer/types";
 import { getExplorerUrl } from "@/lib/genlayer/client";
@@ -135,10 +136,10 @@ export default function VerificationLedgerPage() {
             </span>
             <div className="flex items-center gap-2">
               <Cpu className="w-4 h-4 text-amber-400" />
-              <span className="font-bold text-sm text-zinc-100">Multi-Validator LLM</span>
+              <span className="font-bold text-sm text-zinc-100">Evidence Content-Bound</span>
             </div>
             <p className="text-[11px] text-zinc-500">
-              Comparative Equivalence Principle
+              Nondeterministic Web Retrieval + Hash Match
             </p>
           </div>
 
@@ -159,7 +160,7 @@ export default function VerificationLedgerPage() {
           <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
             <div className="space-y-0.5">
               <h2 className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
-                On-Chain Verification Records
+                On-Chain Verification Records & Evidence Provenance
               </h2>
               <p className="text-[11px] text-zinc-400">
                 Auditable state transitions and validator consensus outcomes
@@ -206,6 +207,9 @@ export default function VerificationLedgerPage() {
                         {item.verificationId}
                       </span>
                       {getDecisionBadge(item.decision)}
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-mono ${item.evidenceVerified ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800" : "bg-zinc-800 text-zinc-400"}`}>
+                        {item.evidenceVerified ? "Evidence: VERIFIED" : "Evidence: UNVERIFIED"}
+                      </span>
                     </div>
                     <span className="text-[11px] text-zinc-500">
                       {new Date(item.finalizedAt || item.createdAt).toLocaleString()}
@@ -220,14 +224,23 @@ export default function VerificationLedgerPage() {
                     &ldquo;{item.rationale}&rdquo;
                   </p>
 
+                  {item.sourceUrls && item.sourceUrls.length > 0 && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
+                      <Globe className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span className="truncate max-w-md font-mono text-[10px]">
+                        {item.sourceUrls.join(", ")}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center flex-wrap gap-4 pt-1 text-[11px] text-zinc-500 font-mono">
                     <span className="flex items-center gap-1">
                       <Hash className="w-3 h-3 text-zinc-600" />
-                      Q-Hash: {item.questionHash.substring(0, 10)}...
+                      Commitment: {item.expectedEvidenceHash ? item.expectedEvidenceHash.substring(0, 10) : "N/A"}...
                     </span>
                     <span className="flex items-center gap-1">
                       <Hash className="w-3 h-3 text-zinc-600" />
-                      E-Hash: {item.evidenceHash.substring(0, 10)}...
+                      Retrieved: {item.actualEvidenceHash ? item.actualEvidenceHash.substring(0, 10) : "N/A"}...
                     </span>
                     <span>Confidence: {item.confidence}%</span>
                     {item.transactionHash && (

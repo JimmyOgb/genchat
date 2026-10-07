@@ -88,7 +88,11 @@ export interface Database {
           transaction_hash: string | null;
           question_title: string;
           question_hash: string;
-          evidence_hash: string;
+          expected_evidence_hash: string;
+          actual_evidence_hash: string | null;
+          source_urls: Json;
+          evidence_verified: boolean;
+          user_context_summary: string | null;
           status: string;
           decision: string;
           confidence: number | null;
@@ -105,7 +109,11 @@ export interface Database {
           transaction_hash?: string | null;
           question_title: string;
           question_hash: string;
-          evidence_hash: string;
+          expected_evidence_hash: string;
+          actual_evidence_hash?: string | null;
+          source_urls?: Json;
+          evidence_verified?: boolean;
+          user_context_summary?: string | null;
           status?: string;
           decision?: string;
           confidence?: number | null;
@@ -122,7 +130,11 @@ export interface Database {
           transaction_hash?: string | null;
           question_title?: string;
           question_hash?: string;
-          evidence_hash?: string;
+          expected_evidence_hash?: string;
+          actual_evidence_hash?: string | null;
+          source_urls?: Json;
+          evidence_verified?: boolean;
+          user_context_summary?: string | null;
           status?: string;
           decision?: string;
           confidence?: number | null;

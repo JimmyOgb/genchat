@@ -1,7 +1,57 @@
 import { readFileSync, writeFileSync } from "fs";
 import path from "path";
+import https from "https";
+import http from "http";
 import { fileURLToPath } from "url";
-import { createClient, chains, createAccount, generatePrivateKey } from "../frontend/node_modules/genlayer-js/dist/index.js";
+
+// Custom node https fetch polyfill for rock-solid StudioNet connectivity in Node.js
+function nodeHttpsFetch(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const lib = parsed.protocol === "https:" ? https : http;
+    const req = lib.request(
+      parsed,
+      {
+        method: options.method || "GET",
+        headers: options.headers || {},
+        timeout: 45000,
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => {
+          const buffer = Buffer.concat(chunks);
+          const text = buffer.toString("utf-8");
+          resolve(
+            new Response(text, {
+              status: res.statusCode,
+              statusText: res.statusMessage,
+              headers: res.headers,
+            })
+          );
+        });
+      }
+    );
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("nodeHttpsFetch request timed out after 45s"));
+    });
+    req.on("error", reject);
+    if (options.body) {
+      req.write(options.body);
+    }
+    req.end();
+  });
+}
+
+globalThis.fetch = nodeHttpsFetch;
+
+import {
+  createClient,
+  chains,
+  createAccount,
+  generatePrivateKey,
+} from "../frontend/node_modules/genlayer-js/dist/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,7 +88,7 @@ async function deploy() {
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash,
       status: "ACCEPTED",
-      retries: 40,
+      retries: 50,
       interval: 4000,
       fullTransaction: true,
     });

@@ -1,6 +1,6 @@
 # GenChat
 
-> **Ask anything. Get a fast answer. Verify what matters.**
+> **Ask anything. Get a fast answer. Verify what matters with decentralized evidence consensus.**
 
 GenChat is a production-grade AI assistant combining high-speed conversational intelligence with on-demand, decentralized validator consensus on **GenLayer StudioNet**. Built with a strict separation of concerns, GenChat delivers immediate streaming answers for everyday queries while enabling cryptographically verifiable, multi-validator adjudication for high-stakes decisions through connected browser wallets.
 
@@ -12,424 +12,150 @@ GenChat is a production-grade AI assistant combining high-speed conversational i
 
 ---
 
-## 1. Overview
+## 1. Verifiable Evidence Protocol Architecture (Critical Steward Fix)
 
-GenChat is an AI application engineered around a pragmatic philosophy:
-- **Everyday questions** require low-latency streaming responses without cryptocurrency barriers, wallet popups, or unnecessary fees.
-- **Critical claims and agreements** (contract criteria, milestone approvals, contested facts, regulatory interpretations) demand independent, tamper-resistant adjudication that no single centralized model or API provider can tamper with.
+### The Problem in Legacy Design
+Previously, GenChat validators assessed a caller-supplied context summary without authenticating or retrieving the underlying web/document evidence behind the claimed factual verification. This allowed a caller to potentially submit an inaccurate summary and receive an approval.
 
-GenChat unifies:
-- **Fast Conversational AI:** Groq-accelerated inference running open-weight LLMs (`openai/gpt-oss-120b`).
-- **Live Research:** Source-aware web retrieval that transparently separates internal knowledge from real-time facts.
-- **Decentralized Multi-Validator Consensus:** Intelligent contract execution on GenLayer StudioNet where independent validator nodes reach consensus on truth, confidence, and rationale.
-- **Secure Cloud Authentication & Persistence:** Real Supabase Cloud authentication, PostgreSQL conversation history, and fine-grained Row Level Security (RLS).
-- **Non-Custodial Wallet Safety:** Injected EIP-1193 browser wallet signing (MetaMask, Rabby) with zero server-side private keys, zero token approvals, and zero automatic connection triggers.
+### The New Verifiable Architecture
+GenChat does **NOT** treat caller-provided summaries as authoritative evidence. The user-provided summary is purely non-authoritative description metadata.
+
+Instead, GenChat uses GenLayer's native nondeterministic web access (`gl.nondet.web.get`) so that **GenLayer validators independently retrieve and inspect the referenced evidence source contents**:
+
+```text
+CLAIM & CRITERIA + SOURCE URL(S) + COMMITMENT HASH
+        │
+        ▼ (Write Contract via Connected Browser Wallet)
+GenLayer StudioNet Intelligent Contract
+        │
+        ├─► [GenLayer Leader Node]
+        │     ├── gl.nondet.web.get(source_url)
+        │     ├── Deterministic canonicalization (LF normalization & whitespace trimming)
+        │     ├── Computes actual_evidence_hash = SHA256(canonical_content)
+        │     ├── Hash commitment check: actual_evidence_hash == expected_evidence_hash
+        │     ├── Prompt Injection Defense: source content treated strictly as UNTRUSTED DATA
+        │     └── AI Claim Evaluation against retrieved canonical content
+        │
+        └─► [GenLayer Checking Validator Nodes] (gl.vm.run_nondet_unsafe)
+              ├── Independently re-executes gl.nondet.web.get(source_url)
+              ├── Independently computes actual_evidence_hash
+              ├── Validates hash commitment match
+              ├── Independently evaluates claim under criteria
+              ├── Equivalence Principle:
+              │     - evidence_verified flags MUST match
+              │     - actual_evidence_hash MUST match exactly
+              │     - decision MUST match
+              │     - confidence within 35% tolerance
+              │     - invariant: APPROVED requires evidence_verified == true
+              └── Multi-validator consensus achieved (MAJORITY_AGREE)
+        │
+        ▼
+On-Chain Auditable Record Stored in Contract State:
+  - verification_id
+  - claim / question
+  - source_urls_json
+  - expected_evidence_hash
+  - actual_evidence_hash
+  - evidence_verified (boolean)
+  - decision (APPROVED / REJECTED / INCONCLUSIVE)
+  - confidence
+  - validator rationale
+  - user_context_summary (non-authoritative)
+  - timestamps & requester address
+```
 
 ---
 
-## 2. Problem
+## 2. Pinned Intelligent Contracts on GenLayer StudioNet
 
-Modern generative AI models are prone to subtle hallucinations, single-provider bias, and subjective inconsistencies. In mission-critical workflows:
-- Blindly trusting a single model's output introduces severe operational and legal risk.
-- Centralized LLM providers can update, censor, or alter model responses without notice.
-- Traditional web3 solutions force users to pay gas or connect wallets just to ask simple questions.
-
-GenChat resolves this dichotomy:
-1. **Tier 1 — Fast Chat:** Fast, zero-friction conversation with no blockchain or wallet dependencies.
-2. **Tier 2 — Researched Chat:** Live factual grounding with source attribution.
-3. **Tier 3 — Independently Verified:** Transparent on-chain validator consensus on GenLayer StudioNet, providing an auditable public receipt.
+| Parameter | Value |
+|---|---|
+| **Network** | GenLayer StudioNet |
+| **Chain ID** | `61999` (`0xF22F`) |
+| **RPC Endpoint** | `https://studio.genlayer.com/api` |
+| **Explorer** | `https://studio.genlayer.com` |
+| **New Upgraded Contract** | `0x02DF9f0Cd7abF48Dea426725567b03032a65651A` |
+| **New Deployment Tx** | [`0xfddb9161348fb9a89133039d8f50778e0f3ca96bfb08bc5094d4ad124dd5af03`](https://studio.genlayer.com/tx/0xfddb9161348fb9a89133039d8f50778e0f3ca96bfb08bc5094d4ad124dd5af03) |
+| **Old Contract (Deprecated)** | `0x1b06F421f1d7228aC34f087f37309456D2434344` |
+| **Runner Dependency** | `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6` |
 
 ---
 
-## 3. Product Modes
+## 3. Real StudioNet Evidence Verification Proof
+
+A live multi-validator consensus transaction was submitted and finalized on GenLayer StudioNet to demonstrate the end-to-end evidence path:
+
+- **Transaction Hash:** [`0x45f19d4777fc7fda24f0f01f06c8b64291cee6f6a3e082135c624e0a58d1c092`](https://studio.genlayer.com/tx/0x45f19d4777fc7fda24f0f01f06c8b64291cee6f6a3e082135c624e0a58d1c092)
+- **Verification ID:** `v_1791352846702_c2ea0c`
+- **Claim:** `"Does the retrieved evidence confirm that EIP stands for Ethereum Improvement Proposal?"`
+- **Source URL:** `https://raw.githubusercontent.com/ethereum/EIPs/master/EIPS/eip-1.md`
+- **Expected Hash Commitment:** `0xad42acaf7e1139ce648a9c5561d1e00e777faf848941e9ee50c3f69792882122`
+- **Actual Retrieved Evidence Hash:** `0xad42acaf7e1139ce648a9c5561d1e00e777faf848941e9ee50c3f69792882122`
+- **Evidence Verified:** `true` (Exact match)
+- **Consensus Result:** `MAJORITY_AGREE` / `ACCEPTED`
+- **Final Decision:** `APPROVED` (100% confidence)
+- **Validator Rationale:** *"The source explicitly states \"EIP stands for Ethereum Improvement Proposal\" in the definition section."*
+
+---
+
+## 4. Test Matrix & Protocol Invariant Verification
+
+The protocol test suite (`contract/test_protocol_suite.mjs`) validates the security boundaries against attacks and failure modes:
+
+| Test Case | Scenario | Result |
+|---|---|---|
+| **Test 1 — Caller Summary Alone** | False summary provided, but source contradicts claim. | **PASS** (Validators reject claim: `REJECTED`, summary ignored) |
+| **Test 2 — Source Retrieval** | Real public source URL provided. | **PASS** (Validators retrieve source directly via `gl.nondet.web.get`) |
+| **Test 3 — Hash Match** | Retrieved canonical hash equals committed hash. | **PASS** (`evidence_verified: true`, eligible for `APPROVED`) |
+| **Test 4 — Hash Mismatch** | Caller commits altered hash `0xdeadbeef...`. | **PASS** (`evidence_verified: false`, forced `INCONCLUSIVE`, cannot be approved) |
+| **Test 5 — Source Changed** | Source content differs from commitment. | **PASS** (Mismatch detected, `INCONCLUSIVE`) |
+| **Test 6 — Source Unavailable** | HTTP 404 URL provided. | **PASS** (`INCONCLUSIVE`, `evidence_verified: false`) |
+| **Test 7 — Source Contradiction** | Evidence contradicts claim under criteria. | **PASS** (`REJECTED`) |
+| **Test 8 — Adversarial Webpage** | Prompt injection instructions in source content. | **PASS** (Treated strictly as UNTRUSTED DATA; instructions ignored) |
+| **Test 9 — Multiple Sources** | Array of URLs passed in `source_urls_json`. | **PASS** (Retrieved, concatenated deterministically, and bound) |
+| **Test 10 — No Source URL** | Empty URL array submitted. | **PASS** (Transaction reverts, no record created) |
+| **Test 11 — No Evidence Hash** | Empty hash commitment submitted. | **PASS** (Transaction reverts, no record created) |
+| **Test 12 — Real StudioNet Run** | Real wallet transaction on live network. | **PASS** (Consensus reached in ~20s, full on-chain provenance stored) |
+
+---
+
+## 5. Product Modes
 
 | Mode | Engine / Provider | Wallet Required? | Typical Latency | Best For |
 |---|---|---|---|---|
 | **⚡ Fast** | Groq Cloud (`openai/gpt-oss-120b`) | **No** | ~200ms first token | Brainstorming, coding, drafting, general knowledge |
 | **🔎 Research** | Groq + `SearchProvider` (Serper / Tavily) | **No** | ~1.5s (live search) | Recent news, technical documentation, factual evidence |
-| **⚖️ Verified** | GenLayer StudioNet Intelligent Contract | **Yes (EIP-1193)** | Network consensus | Milestone approvals, contractual criteria, truth adjudication |
+| **⚖️ Verified** | GenLayer StudioNet Intelligent Contract | **Yes (EIP-1193)** | Network consensus | Verifiable claims, contractual criteria, evidence-bound adjudication |
 
 ---
 
-## 4. Architecture
-
-```text
-User Browser
-    │
-    ├── Fast / Research Queries (No Wallet Needed)
-    │     │
-    │     ▼
-    │   Next.js Application (App Router / Edge & Node Runtime)
-    │     ├── API Route: /api/chat
-    │     │     ├── Groq Cloud Provider (openai/gpt-oss-120b)
-    │     │     └── SearchProvider Abstraction (Serper / Tavily)
-    │     └── Supabase Cloud (PostgreSQL + RLS + Auth / PKCE)
-    │
-    └── High-Stakes Claim Verification (Explicit User Action)
-          │
-          ▼
-        Verification Modal (Explicit "Connect Wallet")
-          │
-          ▼
-        Injected Browser Wallet (window.ethereum via EIP-1193)
-          │  [eth_requestAccounts, wallet_switchEthereumChain: 0xF22F]
-          │  [eth_sendTransaction signed by user]
-          ▼
-        GenLayer StudioNet (Chain ID: 61999)
-          │
-          ▼
-        GenChatVerifier Intelligent Contract (0x1b06F421f1d7228aC34f087f37309456D2434344)
-          │
-          ▼
-        Independent Multi-Validator AI Consensus (Comparative Execution)
-          │
-          ▼
-        On-Chain Verification Record (APPROVED / REJECTED / INCONCLUSIVE)
-          │
-          ▼
-        Public Explorer Audit Link (https://studio.genlayer.com)
-```
-
----
-
-## 5. AI Layer
-
-- **Provider:** Groq Cloud SDK.
-- **Model:** `openai/gpt-oss-120b` (default).
-- **Streaming:** Server-Sent Events (SSE) via Next.js `ReadableStream` for instantaneous UI updates.
-- **Safety Guidelines:** System prompts prohibit the model from presenting itself as a certified legal authority or claiming on-chain verification has occurred unless validated on GenLayer.
-- **Security Invariant:** `GROQ_API_KEY` is strictly server-only. It is never exposed via `NEXT_PUBLIC_*` or bundled into client-side JavaScript.
-
----
-
-## 6. Research Layer
-
-- **Abstraction:** Modular `SearchProvider` interface (`SerperProvider`, `TavilyProvider`).
-- **Integrity Guarantee:** Never fabricates citations. If research API keys are unconfigured, GenChat honestly explains that live search is unconfigured rather than pretending to browse the web.
-- **Evidence Formatting:** Distinguishes internal parametric weights from external retrieved snippets.
-
----
-
-## 7. GenLayer Verification
-
-GenChat interacts with a live, real intelligent contract deployed on **GenLayer StudioNet**:
-
-- **Network:** GenLayer StudioNet
-- **Chain ID:** `61999` (Hex: `0xF22F` / `0xf22f`)
-- **RPC Endpoint:** `https://studio.genlayer.com/api`
-- **Explorer:** `https://studio.genlayer.com`
-- **Contract Address:** `0x1b06F421f1d7228aC34f087f37309456D2434344`
-
-### Contract Methods
-
-- `request_verification(verification_id: str, question_title: str, evidence_hash: str) -> None`: Submits a verification request to GenLayer validators.
-- `get_verification(verification_id: str) -> dict`: Returns the full consensus record including `decision`, `confidence`, `rationale`, `leader_model`, and `timestamp`.
-- `get_verification_text(verification_id: str) -> str`: Returns a formatted, human-readable plaintext consensus certificate.
-- `get_verification_decision(verification_id: str) -> str`: Returns the consensus decision (`APPROVED`, `REJECTED`, or `INCONCLUSIVE`).
-- `get_verification_count() -> int`: Returns the total number of processed verification requests.
-- `list_verifications(offset: int, limit: int) -> list`: Retrieves paginated verification IDs.
-
----
-
-## 8. Wallet Architecture & Transaction Routing
-
-GenChat implements a safe, non-intrusive Web3 wallet connection flow:
-
-1. **Standard Injected Provider:** Uses `getInjectedProvider()` to detect standard EIP-1193 providers (`window.ethereum`, MetaMask, Rabby).
-2. **Explicit User Interaction:** `eth_requestAccounts` is **never** triggered on page load, during Supabase login, or during Fast/Research chat. It is only called when the user opens the verification modal and clicks **"Connect Wallet"**.
-3. **Chain Validation:** Non-StudioNet networks are detected immediately, prompting the user with an explicit **"Switch to GenLayer StudioNet"** action (`wallet_switchEthereumChain` with chain ID `0xf22f`).
-4. **RPC Routing Invariant:**
-   In `genlayer-js`, transaction dispatch relies on:
-   ```javascript
-   config.account = getAddress(senderAddress); // string
-   config.provider = getInjectedProvider();     // EIP-1193 window.ethereum
-   ```
-   Because `typeof config.account !== 'object'`, `genlayer-js` routes `eth_sendTransaction` directly to `window.ethereum` for user signing, rather than sending it to the GenLayer RPC endpoint (`https://studio.genlayer.com/api`), preventing `Method not found: eth_sendTransaction`.
-5. **Zero Token Approvals:** GenChat requires zero token allowances, zero ERC-20 approvals, and no token transfers. Transactions invoke the contract directly on StudioNet.
-
----
-
-## 9. Verification State Lifecycle
-
-The verification modal coordinates through explicit, deterministic lifecycle states:
-
-```text
-DISCONNECTED
-    │  (User clicks "Connect Wallet")
-    ▼
-CONNECTING
-    │
-    ├── (Wrong Chain) ──► WRONG_NETWORK ──► (Switch to 0xF22F) ──┐
-    ▼                                                           │
-CONNECTED ──────────────────────────────────────────────────────┘
-    │
-    ▼
-READY (Shortened address displayed: e.g. 0x71C8...6f76)
-    │  (User clicks "Submit Verification to GenLayer")
-    ▼
-AWAITING_WALLET (Wallet popup opens for user signature)
-    │
-    ▼
-WALLET_SUBMITTED (Transaction broadcasted with txHash)
-    │
-    ▼
-PROCESSING (Contract execution initiated)
-    │
-    ▼
-CONSENSUS (Validators execute comparative evaluation)
-    │
-    ▼
-FINALIZED
-    │
-    ├── VERIFIED (APPROVED)
-    ├── REJECTED
-    └── INCONCLUSIVE
-```
-
----
-
-## 10. Authentication and Data Layer
-
-- **Supabase Cloud:** Uses real Supabase Cloud Auth with email/password and PKCE authentication flow.
-- **Route Protection:** Authenticated `/chat` route with automatic session restoration and session refresh.
-- **Persistence:** Real PostgreSQL tables for `conversations`, `messages`, and `verification_records`.
-- **Row Level Security (RLS):** All tables strictly enforce `auth.uid() = user_id`, guaranteeing cross-tenant data isolation.
-
----
-
-## 11. Security Model
-
-- **No Leaked Private Keys:** No server-side private keys, seed phrases, or master signers exist in the codebase.
-- **Server Secret Isolation:** `GROQ_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are server-only secrets.
-- **No Mock Consensus:** Zero synthetic consensus, fake balances, or fabricated transaction hashes.
-- **Off-Chain Document Safety:** Documents uploaded for verification are hashed locally via deterministic SHA-256 (`crypto.subtle`); only sanitized criteria and hashes are submitted on-chain.
-
----
-
-## 12. Environment Variables
-
-Create `.env.local` in `frontend/` (or configure in Vercel):
-
-```bash
-# ==========================================
-# PUBLIC CLIENT VARIABLES (Exposed to Browser)
-# ==========================================
-NEXT_PUBLIC_SUPABASE_URL=https://<your-project-id>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-supabase-anon-key>
-
-NEXT_PUBLIC_GENLAYER_RPC_URL=https://studio.genlayer.com/api
-NEXT_PUBLIC_GENLAYER_CHAIN_ID=61999
-NEXT_PUBLIC_GENLAYER_CHAIN_NAME="GenLayer StudioNet"
-NEXT_PUBLIC_GENLAYER_SYMBOL=GEN
-NEXT_PUBLIC_GENLAYER_EXPLORER_URL=https://studio.genlayer.com
-NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS=0x1b06F421f1d7228aC34f087f37309456D2434344
-
-# ==========================================
-# SERVER-ONLY SECRETS (Never exposed to Browser)
-# ==========================================
-SUPABASE_SERVICE_ROLE_KEY=<your-supabase-service-role-key>
-GROQ_API_KEY=<your-groq-api-key>
-
-# Optional server-side fallbacks & search providers
-GENLAYER_RPC_URL=https://studio.genlayer.com/api
-GENLAYER_CHAIN_ID=61999
-GENCHAT_CONTRACT_ADDRESS=0x1b06F421f1d7228aC34f087f37309456D2434344
-SERPER_API_KEY=
-TAVILY_API_KEY=
-```
-
-> [!CAUTION]
-> Never commit `.env.local` or any production secret keys to version control.
-
----
-
-## 13. Local Development
+## 6. Local Development
 
 ### Prerequisites
 - Node.js 20+ (Node 24 tested)
 - npm 10+
-- Python 3.11+ (for intelligent contract testing)
-
-### Installation & Execution
+- Python 3.11+ / 3.12+
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/JimmyOgb/genchat.git
 cd genchat
 
-# 2. Install frontend dependencies
+# 2. Install dependencies & build frontend
 cd frontend
 npm install
-
-# 3. Type check
-npm run typecheck
-
-# 4. Lint check
-npm run lint
-
-# 5. Run test suite
-npm test
-
-# 6. Build production package
 npm run build
 
-# 7. Start local server
-npm run dev
+# 3. Test contract with genvm linter
+cd ..
+python -c "import genvm_linter; print(genvm_linter.GenVMLinter().lint_file('contract/GenChatVerifier.py'))"
+
+# 4. Run real StudioNet evidence verification test
+node contract/test_real_studionet_evidence.mjs
 ```
 
 ---
 
-## 14. Testing Suite
+## 7. License
 
-The repository contains an automated test suite with **43 passing tests across 17 suites**:
-
-```text
-▶ Deterministic SHA-256 Hashing Utilities (3 tests)
-▶ AI Provider Configuration & Model Integrity (3 tests)
-▶ SearchProvider Abstraction (2 tests)
-▶ Document Extraction & Evidence Hashing (2 tests)
-▶ Verification State Machine Transitions (2 tests)
-▶ System Prompt & Safety Rules Compliance (2 tests)
-▶ Plaintext Verification Format & Contract Invariants (4 tests)
-▶ Decoupled Sign In & Chat from Wallet APIs (3 tests)
-▶ StudioNet Network Safety & Chain Validation (4 tests)
-▶ Explicit Safe Wallet UX & Network Switching Prompts (2 tests)
-▶ User Cancellation Handling & Resilience (3 tests)
-▶ Zero Token Approvals Enforcement (1 test)
-▶ Favicon & Public Assets Integrity (1 test)
-▶ Supabase Schema & Row Level Security (RLS) Invariants (1 test)
-▶ Environment Variable Classification & Secret Leak Prevention (1 test)
-▶ GenLayer Contract Address Validation & Viem Integration (4 tests)
-▶ Browser Wallet Connection & GenLayer RPC Routing Safety (5 tests)
-
-Total: 43 passed, 0 failed, 17 suites
-```
-
-In addition, `frontend/test/manual_e2e_browser_test.mjs` executes headless browser testing across:
-- Fresh page load (0 wallet calls)
-- Real Supabase Cloud sign-in / sign-out / session persistence
-- Fast Mode & Research Mode queries
-- Verification Modal wallet connection & StudioNet switching
-- Transaction signing dispatch to `window.ethereum` (0 `InvalidAddressError`, 0 `Method not found: eth_sendTransaction`)
-
----
-
-## 15. Deployment
-
-### Vercel Production Deployment
-
-- **Production URL:** [https://genchat-nine.vercel.app](https://genchat-nine.vercel.app)
-- **Deployment Status:** Active & Tested (`READY`)
-- **Next.js Framework:** App Router with Server Components
-
-### Supabase Redirect URL Configuration
-In your Supabase Cloud Dashboard under **Authentication ➔ URL Configuration**:
-- **Site URL:** `https://genchat-nine.vercel.app`
-- **Redirect URLs:**
-  - `https://genchat-nine.vercel.app/auth/callback`
-  - `http://localhost:3000/auth/callback` (for local development)
-
----
-
-## 16. Repository Structure
-
-```text
-genchat/
-├── contract/
-│   ├── GenChatVerifier.py             # GenVM intelligent contract on StudioNet
-│   ├── deployment.json                # StudioNet deployment metadata & tx hash
-│   ├── requirements.txt               # Contract build dependencies
-│   └── tests/
-│       └── test_genchat_verifier.py   # Direct mode pytest suite
-├── frontend/
-│   ├── public/
-│   │   ├── favicon.ico                # GenChat application icon
-│   │   └── logo.png                   # Brand asset
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── api/
-│   │   │   │   ├── chat/route.ts      # Groq streaming endpoint
-│   │   │   │   ├── documents/route.ts # Evidence extraction & SHA-256
-│   │   │   │   └── verify/route.ts    # GenLayer readback endpoint
-│   │   │   ├── auth/callback/route.ts # Supabase PKCE code exchange
-│   │   │   ├── chat/page.tsx          # Conversational workspace
-│   │   │   ├── verify/page.tsx        # Verification explorer
-│   │   │   ├── layout.tsx             # Root layout & providers
-│   │   │   └── page.tsx               # Landing page
-│   │   ├── components/
-│   │   │   ├── chat/                  # Chat Composer, Messages, Markdown
-│   │   │   ├── layout/                # Header, AuthModal, ModeToggle
-│   │   │   └── verification/          # VerificationModal, ConsensusMeter
-│   │   └── lib/
-│   │       ├── ai/                    # Groq SDK provider & system prompts
-│   │       ├── genlayer/              # GenLayer client, verifier, EIP-1193 utils
-│   │       ├── research/              # SearchProvider abstraction
-│   │       └── supabase/              # Supabase browser & server clients
-│   ├── test/
-│   │   ├── unit.test.mjs              # 43 automated unit tests
-│   │   └── manual_e2e_browser_test.mjs# Headless browser integration test
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── vercel.json
-├── supabase/
-│   └── schema.sql                     # Cloud PostgreSQL schema with RLS
-├── .env.example                       # Reference environment configuration
-├── .gitignore                         # Secret, node_modules, and cache ignores
-└── README.md
-```
-
----
-
-## 17. Smart Contract
-
-The core verification contract is located at [`contract/GenChatVerifier.py`](file:///contract/GenChatVerifier.py).
-
-- **Deployment Hash:** `0x1230c231ef09c1f24d9c7c2bfa03ecda739a8264d8a24da8396e8e815610e3d5`
-- **Contract Address:** `0x1b06F421f1d7228aC34f087f37309456D2434344`
-- **Execution Engine:** GenVM (WebAssembly-based intelligent contract runner).
-- **Consensus Rule:** Non-deterministic comparative validator adjudication (`gl.vm.run_nondet_unsafe`). Both the leader validator and independent checking validators evaluate the claims against the evidence hash before committing the state.
-
----
-
-## 18. Limitations
-
-- **Decentralized AI Consensus:** GenLayer consensus represents the synchronized determination of independent AI validators, not a binding judicial decree or certified legal advice.
-- **Network Dependency:** On-chain verification latency is subject to GenLayer validator availability and StudioNet block finality.
-- **Inconclusive Outcomes:** If evidence is ambiguous or contradictory, validators may conclude `INCONCLUSIVE`, which is a legitimate and honest consensus result.
-- **Wallet Requirement:** While Fast Chat and Research Mode require no wallet, Verified Mode requires an EIP-1193 compliant wallet (MetaMask, Rabby).
-
----
-
-## 19. Roadmap
-
-- [x] Groq `openai/gpt-oss-120b` fast streaming integration.
-- [x] Live web research fallback and citation formatting.
-- [x] Real GenLayer StudioNet contract deployment.
-- [x] Injected browser-wallet transaction signing with StudioNet chain switching.
-- [x] Supabase Cloud authentication and Row Level Security persistence.
-- [x] Vercel production deployment and live smoke testing.
-- [ ] Multi-turn interactive contract dispute appeals.
-- [ ] Cross-chain verification anchoring to Ethereum/Arbitrum L2s.
-
----
-
-## 20. Contributing
-
-1. Fork the repository.
-2. Create your feature branch (`git checkout -b feature/amazing-feature`).
-3. Ensure all tests pass (`npm run typecheck && npm run lint && npm test`).
-4. Commit your changes with conventional commit syntax (`git commit -m 'feat: add amazing feature'`).
-5. Push to the branch (`git push origin feature/amazing-feature`).
-6. Open a Pull Request.
-
----
-
-## 21. Security Disclosure
-
-If you discover a potential vulnerability or security issue, please do not open a public issue. Contact the project maintainers directly or submit a private security advisory through GitHub.
-
----
-
-## 22. License
-
-Private / All rights reserved unless otherwise licensed by the repository owner.
+MIT
