@@ -235,6 +235,8 @@ describe("request_verification signature (offline)", () => {
     assert.throws(() => buildRequestArgs(sampleRequest({ sourceUrls: ["ftp://x"] })), /http/);
     assert.throws(() => buildRequestArgs(sampleRequest({ sourceUrls: ["javascript:alert(1)"] })), /http/);
     assert.throws(() => buildRequestArgs(sampleRequest({ expectedEvidenceHash: "0x1234" })), /expectedEvidenceHash/);
+    assert.throws(() => buildRequestArgs(sampleRequest({ questionHash: "not-a-valid-hash" })), /questionHash/);
+    assert.throws(() => buildRequestArgs(sampleRequest({ questionHash: "0x" + "12".repeat(10) })), /questionHash/);
     assert.throws(() => buildRequestArgs(sampleRequest({ criteria: " " })), /criteria/);
     assert.throws(() => buildRequestArgs(sampleRequest({ questionTitle: "" })), /questionTitle/);
     assert.throws(() => buildRequestArgs(sampleRequest({ verificationId: "x".repeat(65) })), /64/);
@@ -246,6 +248,7 @@ describe("request_verification signature (offline)", () => {
     assert.match(verifier, /args: buildRequestArgs\(request\)/);
   });
 });
+
 
 describe("Verification record schema (offline)", () => {
   const dataclass = contractSrc.match(/class VerificationRecord:\n([\s\S]*?)\n\n\nclass /)[1];

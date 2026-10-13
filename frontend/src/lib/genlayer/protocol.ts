@@ -46,7 +46,9 @@ export function buildRequestArgs(request: VerificationRequest): RequestVerificat
   if (title.length > 500) throw new Error("questionTitle exceeds 500 characters");
 
   const questionHash = (request.questionHash ?? "").trim().toLowerCase();
-  if (questionHash.length < 32) throw new Error("questionHash must be a valid cryptographic hash");
+  if (!HASH_RE.test(questionHash)) {
+    throw new Error("questionHash must be a valid 32-byte cryptographic SHA-256 hash");
+  }
 
   const expected = (request.expectedEvidenceHash ?? "").trim();
   if (!HASH_RE.test(expected)) {

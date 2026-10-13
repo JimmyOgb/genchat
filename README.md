@@ -66,7 +66,33 @@ On-Chain Auditable Record Stored in Contract State:
 
 ---
 
-## 2. Pinned Intelligent Contracts on GenLayer StudioNet
+## 2. Honest Verification Claims Framework (Steward Guidance)
+
+GenChat explicitly separates and articulates what GenLayer validator consensus does and does not establish:
+
+1. **Content Integrity:**
+   Cryptographic verification that the byte content retrieved from the web yields an identical SHA-256 hash when canonicalized (LF line endings, trimmed trailing whitespace) to the caller's committed `expected_evidence_hash`.
+2. **Source Provenance:**
+   GenLayer validators independently execute `gl.nondet.web.get` against the specific HTTP(S) URL(s) provided. Provenance confirms which URLs served the content to the validator quorum at execution time.
+3. **Semantic Assessment:**
+   Decentralized validator LLMs adjudicate whether the retrieved text unequivocally supports the claim under the supplied evaluation criteria according to GenLayer's Equivalence Principle (`gl.vm.run_nondet_unsafe`).
+4. **Factual Truth Limitations (Crucial Disclosure):**
+   Decentralized consensus on evidence does **not** automatically establish objective, real-world truth. A requester-selected source may be authentic yet biased, outdated, incomplete, or controlled by an interested party. GenChat certifies **evidence integrity and validator agreement against stated criteria**, never infallible real-world factuality.
+
+### Authoritative Timestamps & GenVM Runtime Limitations
+- **Requester Metadata (`created_at`):** Supplied by the client at transaction submission time. Stored purely as non-authoritative client metadata. The contract, UI, and ledger explicitly label this field as untrusted caller metadata.
+- **Consensus Finalization (`finalized_at`):** Represents the consensus state transition time recorded upon validator finalization.
+- **Protocol Resource Limits:**
+  - Max source URLs: 10 URLs per verification request.
+  - Max claim length: 500 characters.
+  - Max criteria length: 2,000 characters.
+  - Max user summary: 4,000 characters (strictly isolated as metadata; never fed as evidence).
+  - Evaluatable evidence context: 6,000 characters per model prompt slice.
+  - Retrieval failures (HTTP 4xx/5xx, timeouts, empty responses) immediately yield `INCONCLUSIVE` (never `APPROVED`).
+
+---
+
+## 3. Pinned Intelligent Contracts on GenLayer StudioNet
 
 | Parameter | Value |
 |---|---|
@@ -81,7 +107,7 @@ On-Chain Auditable Record Stored in Contract State:
 
 ---
 
-## 3. Real StudioNet Evidence Verification Proof
+## 4. Real StudioNet Evidence Verification Proof
 
 A live multi-validator consensus transaction was submitted and finalized on GenLayer StudioNet to demonstrate the end-to-end evidence path:
 
@@ -98,28 +124,33 @@ A live multi-validator consensus transaction was submitted and finalized on GenL
 
 ---
 
-## 4. Test Matrix & Protocol Invariant Verification
+## 5. Test Matrix & Protocol Invariant Verification
 
-The protocol test suite (`contract/test_protocol_suite.mjs`) validates the security boundaries against attacks and failure modes:
+The protocol test suite covers all 12 steward-required verification scenarios plus additional boundary invariants. All results are committed in machine-readable format at [`contract/test_suite_results.json`](contract/test_suite_results.json):
 
-| Test Case | Scenario | Result |
-|---|---|---|
-| **Test 1 — Caller Summary Alone** | False summary provided, but source contradicts claim. | **PASS** (Validators reject claim: `REJECTED`, summary ignored) |
-| **Test 2 — Source Retrieval** | Real public source URL provided. | **PASS** (Validators retrieve source directly via `gl.nondet.web.get`) |
-| **Test 3 — Hash Match** | Retrieved canonical hash equals committed hash. | **PASS** (`evidence_verified: true`, eligible for `APPROVED`) |
-| **Test 4 — Hash Mismatch** | Caller commits altered hash `0xdeadbeef...`. | **PASS** (`evidence_verified: false`, forced `INCONCLUSIVE`, cannot be approved) |
-| **Test 5 — Source Changed** | Source content differs from commitment. | **PASS** (Mismatch detected, `INCONCLUSIVE`) |
-| **Test 6 — Source Unavailable** | HTTP 404 URL provided. | **PASS** (`INCONCLUSIVE`, `evidence_verified: false`) |
-| **Test 7 — Source Contradiction** | Evidence contradicts claim under criteria. | **PASS** (`REJECTED`) |
-| **Test 8 — Adversarial Webpage** | Prompt injection instructions in source content. | **PASS** (Treated strictly as UNTRUSTED DATA; instructions ignored) |
-| **Test 9 — Multiple Sources** | Array of URLs passed in `source_urls_json`. | **PASS** (Retrieved, concatenated deterministically, and bound) |
-| **Test 10 — No Source URL** | Empty URL array submitted. | **PASS** (Transaction reverts, no record created) |
-| **Test 11 — No Evidence Hash** | Empty hash commitment submitted. | **PASS** (Transaction reverts, no record created) |
-| **Test 12 — Real StudioNet Run** | Real wallet transaction on live network. | **PASS** (Consensus reached in ~20s, full on-chain provenance stored) |
+| Test ID | Scenario & Purpose | Environment | Real Tx Hash / Explorer | Result |
+|---|---|---|---|---|
+| **PROTOCOL-01** | **Valid matching evidence:** Public source fetched, hash matched, claim approved. | `live_studionet` | [`0x45f19d47...`](https://studio.genlayer.com/tx/0x45f19d4777fc7fda24f0f01f06c8b64291cee6f6a3e082135c624e0a58d1c092) | **PASS** (`APPROVED`, 100%) |
+| **PROTOCOL-02** | **Expected-hash mismatch:** Altered hash commitment `0xdeadbeef...`. | `live_studionet` | [`0x4bb516b0...`](https://studio.genlayer.com/tx/0x4bb516b0e7060925a2898cee84f859d276c32a7cd4fc87ce5f84b522bb3b675a) | **PASS** (`INCONCLUSIVE`, ev=false) |
+| **PROTOCOL-03** | **Unavailable or 404 source:** Broken source URL fails retrieval. | `live_studionet` | [`0x249cdadc...`](https://studio.genlayer.com/tx/0x249cdadc1c47890abc0049d9142a143de78f6eff207561c2dc98b6eff73ab50c) | **PASS** (`INCONCLUSIVE`, ev=false) |
+| **PROTOCOL-04** | **Prompt-injection defense:** Adversarial instructions in source treated strictly as DATA. | `live_studionet` | [`0x0d4acc21...`](https://studio.genlayer.com/tx/0x0d4acc21d889883389cf9394e8e8b12ac9c8f8bf429bdf61da931514343ad7f8) | **PASS** (`REJECTED`, 100%) |
+| **PROTOCOL-05** | **Empty source list:** Empty URL array `[]` submitted. | `local_direct_stubbed` | Reverts deterministically | **PASS** (Revert confirmed) |
+| **PROTOCOL-06** | **Validator disagreement:** Equivalence rule tests for hash, decision, confidence divergence >35%. | `local_direct_stubbed` | N/A (contract equivalence logic) | **PASS** (Disagreement rejected) |
+| **PROTOCOL-07** | **Modified source content:** Web body altered after commitment forces hash mismatch. | `local_direct_stubbed` | N/A (direct VM) | **PASS** (`INCONCLUSIVE`) |
+| **PROTOCOL-08** | **Oversized individual response:** Large source documents bounded safely into prompt context. | `local_direct_stubbed` | N/A (direct VM) | **PASS** (Bounded, summary ignored) |
+| **PROTOCOL-09** | **Oversized aggregate evidence:** Multi-source aggregate evidence bounded and hash-bound. | `local_direct_stubbed` | N/A (direct VM) | **PASS** (Composite hash bound) |
+| **PROTOCOL-10** | **Malformed model response:** Validator LLM non-JSON or invalid decision fallback. | `local_direct_stubbed` | N/A (direct VM) | **PASS** (`INCONCLUSIVE` fallback) |
+| **PROTOCOL-11** | **Contradictory multiple sources:** Conflicting facts across URLs detected by validators. | `local_direct_stubbed` | N/A (direct VM) | **PASS** (`REJECTED`, conflict noted) |
+| **PROTOCOL-12** | **Question commitment mismatch & malformed hash:** Altered question detected; short hash reverts. | `local_direct_stubbed` | N/A (direct VM) | **PASS** (Hash mismatch detected) |
+| **PROTOCOL-13** | **Untrusted caller summary override defense:** False caller summary contradicted by source. | `live_studionet` | [`0x63bf11f0...`](https://studio.genlayer.com/tx/0x63bf11f0b486bb4060ad84c408534a82000479ca5e356065ffc5e78c31566dc2) | **PASS** (`REJECTED`, summary ignored) |
+| **PROTOCOL-14** | **Timestamp metadata boundaries:** Valid ISO format accepted; invalid format rejected. | `local_direct_stubbed` | N/A (direct VM) | **PASS** (Boundary validated) |
+| **PROTOCOL-15** | **Duplicate verification ID defense:** Prevents overwriting finalized consensus records. | `local_direct_stubbed` | N/A (direct VM) | **PASS** (Duplicate reverts) |
+
+Every test scenario records exact reproducible fixtures, expected vs actual outcomes, and network status in [`contract/test_suite_results.json`](contract/test_suite_results.json).
 
 ---
 
-## 5. Product Modes
+## 6. Product Modes
 
 | Mode | Engine / Provider | Wallet Required? | Typical Latency | Best For |
 |---|---|---|---|---|
@@ -129,7 +160,7 @@ The protocol test suite (`contract/test_protocol_suite.mjs`) validates the secur
 
 ---
 
-## 6. Local Development & Configuration
+## 7. Local Development & Configuration
 
 ### Prerequisites
 - Node.js 20+ (Node 24 tested; the offline tests import `.ts` sources directly, which needs Node 22.6+)
@@ -209,6 +240,6 @@ npm run typecheck && npm run lint && npm test && npm run contract:test && npm ru
 
 ---
 
-## 7. License
+## 8. License
 
 MIT

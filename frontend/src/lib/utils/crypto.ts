@@ -4,6 +4,11 @@
  * Shared exact algorithm with GenChatVerifier smart contract.
  */
 
+export function canonicalizeQuestion(raw: string): string {
+  if (!raw) return "";
+  return raw.trim().split(/\s+/).join(" ");
+}
+
 export function canonicalizeEvidence(raw: string): string {
   if (!raw) return "";
   return raw
@@ -14,6 +19,7 @@ export function canonicalizeEvidence(raw: string): string {
     .map((line) => line.trimEnd())
     .join("\n");
 }
+
 
 export async function sha256Hex(data: string | Uint8Array): Promise<string> {
   if (typeof window !== "undefined" && window.crypto?.subtle) {
@@ -35,6 +41,13 @@ export async function computeCanonicalEvidenceHash(rawContent: string): Promise<
   const hash = await sha256Hex(canonical);
   return hash.toLowerCase();
 }
+
+export async function computeCanonicalQuestionHash(rawQuestion: string): Promise<string> {
+  const canonical = canonicalizeQuestion(rawQuestion);
+  const hash = await sha256Hex(canonical);
+  return hash.toLowerCase();
+}
+
 
 /**
  * Generate a unique verification ID

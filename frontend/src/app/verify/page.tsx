@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Hash,
   Globe,
+  Info,
 } from "lucide-react";
 import type { VerificationRecord } from "@/lib/genlayer/types";
 import { getExplorerUrl } from "@/lib/genlayer/client";
@@ -155,6 +156,47 @@ export default function VerificationLedgerPage() {
           </div>
         </div>
 
+        {/* Honest Verification Principles Banner */}
+        <div className="p-4 rounded-2xl bg-zinc-900/40 border border-zinc-800 space-y-3 text-xs">
+          <div className="flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-bold text-zinc-100 block">
+                Honest Verification Claims: What GenLayer Adjudication Establishes
+              </span>
+              <p className="text-[11px] text-zinc-400 leading-relaxed">
+                GenChat distinguishes between cryptographic integrity, provenance, validator consensus, and objective reality:
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5 pt-1 text-[11px]">
+            <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-1">
+              <span className="font-semibold text-amber-400 block">1. Content Integrity</span>
+              <p className="text-[10px] text-zinc-400 leading-normal">
+                Cryptographic confirmation that retrieved byte content matches the expected SHA-256 hash.
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-1">
+              <span className="font-semibold text-amber-400 block">2. Source Provenance</span>
+              <p className="text-[10px] text-zinc-400 leading-normal">
+                Independently fetched by GenLayer validator nodes from the designated public HTTP(S) URLs.
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-1">
+              <span className="font-semibold text-amber-400 block">3. Semantic Assessment</span>
+              <p className="text-[10px] text-zinc-400 leading-normal">
+                Decentralized AI validators reached majority agreement on claim evaluation against criteria.
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-1">
+              <span className="font-semibold text-rose-400 block">4. Factual Truth Limits</span>
+              <p className="text-[10px] text-zinc-400 leading-normal">
+                Requester-selected sources can be incomplete or biased. Consensus verifies agreement on retrieved documents, not absolute truth.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Verification Records Table */}
         <div className="rounded-2xl bg-zinc-900/40 border border-zinc-800 overflow-hidden shadow-sm">
           <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
@@ -211,8 +253,10 @@ export default function VerificationLedgerPage() {
                         {item.evidenceVerified ? "Evidence: VERIFIED" : "Evidence: UNVERIFIED"}
                       </span>
                     </div>
-                    <span className="text-[11px] text-zinc-500">
-                      {new Date(item.finalizedAt || item.createdAt).toLocaleString()}
+                    <span className="text-[11px] text-zinc-500 font-mono">
+                      {item.finalizedAt
+                        ? `Finalized: ${new Date(item.finalizedAt).toLocaleDateString()}`
+                        : `Submitted: ${new Date(item.createdAt).toLocaleDateString()} (Requester TS)`}
                     </span>
                   </div>
 

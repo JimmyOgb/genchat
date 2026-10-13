@@ -19,7 +19,7 @@ import {
   Info,
 } from "lucide-react";
 import type { MessageItem } from "../chat/ChatMessage";
-import { sha256Hex, generateVerificationId } from "@/lib/utils/crypto";
+import { generateVerificationId, computeCanonicalQuestionHash } from "@/lib/utils/crypto";
 import {
   getInjectedProvider,
   connectWallet,
@@ -237,7 +237,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
 
     try {
       const verificationId = generateVerificationId();
-      const questionHash = await sha256Hex(questionTitle);
+      const questionHash = await computeCanonicalQuestionHash(questionTitle);
 
       const verificationRequest: VerificationRequest = {
         verificationId,
@@ -351,12 +351,37 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
           </button>
         </div>
 
-        {/* Notice of Trust Model */}
-        <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-800/50 text-[11px] text-blue-200 flex items-start gap-2.5">
-          <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-          <p className="leading-relaxed">
-            <span className="font-semibold text-blue-300">Trust Boundary:</span> GenLayer validators independently retrieve the referenced evidence URL(s). User summaries are treated as non-authoritative descriptions and cannot produce an APPROVED verdict on their own.
-          </p>
+        {/* Honest Verification Claims & Trust Boundary */}
+        <div className="p-3.5 rounded-xl bg-blue-950/30 border border-blue-800/50 text-[11px] text-blue-200 space-y-2">
+          <div className="flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <span className="font-semibold text-blue-300 block">
+                Honest Verification Principles & Trust Boundaries
+              </span>
+              <p className="leading-relaxed text-blue-200/90">
+                GenLayer consensus provides cryptographically verifiable evidence adjudication across four distinct tiers:
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[10px]">
+            <div className="p-2 rounded-lg bg-zinc-950/60 border border-blue-900/40">
+              <span className="font-bold text-amber-400 block mb-0.5">1. Content Integrity</span>
+              <span className="text-zinc-300">Retrieved bytes strictly match the submitted SHA-256 commitment.</span>
+            </div>
+            <div className="p-2 rounded-lg bg-zinc-950/60 border border-blue-900/40">
+              <span className="font-bold text-amber-400 block mb-0.5">2. Source Provenance</span>
+              <span className="text-zinc-300">Validators independently fetch from specified HTTPS URL(s).</span>
+            </div>
+            <div className="p-2 rounded-lg bg-zinc-950/60 border border-blue-900/40">
+              <span className="font-bold text-amber-400 block mb-0.5">3. Semantic Assessment</span>
+              <span className="text-zinc-300">Multi-validator LLMs evaluate whether evidence satisfies criteria.</span>
+            </div>
+            <div className="p-2 rounded-lg bg-zinc-950/60 border border-blue-900/40">
+              <span className="font-bold text-rose-400 block mb-0.5">4. Objective Truth Notice</span>
+              <span className="text-zinc-300">Requester-selected sources can be incomplete, biased, or outdated. Consensus proves agreement on retrieved text, not absolute reality.</span>
+            </div>
+          </div>
         </div>
 
         {/* Claim Under Review */}
@@ -562,24 +587,35 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400">Evidence Verified by Validators:</span>
+                  <span className="text-zinc-400">Content Integrity:</span>
                   <span className={`font-semibold ${record.evidenceVerified ? "text-emerald-400" : "text-amber-400"}`}>
-                    {record.evidenceVerified ? "YES (Hash Matched)" : "NO (Unverified / Mismatched)"}
+                    {record.evidenceVerified ? "MATCHED (SHA-256 Verified)" : "MISMATCHED / UNVERIFIED"}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400">Actual Retrieved Evidence Hash:</span>
+                  <span className="text-zinc-400">Actual Retrieved Hash:</span>
                   <span className="font-mono text-[11px] text-zinc-300">
                     {record.actualEvidenceHash ? `${record.actualEvidenceHash.slice(0, 14)}...` : "None"}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400">Validator Confidence:</span>
+                  <span className="text-zinc-400">Semantic Consensus Confidence:</span>
                   <span className="font-mono font-semibold text-zinc-200">
                     {record.confidence}%
                   </span>
+                </div>
+
+                <div className="pt-1 border-t border-zinc-800/60 grid grid-cols-2 gap-2 text-[10px] font-mono text-zinc-400">
+                  <div>
+                    <span className="text-zinc-500 block">Requester Timestamp (Metadata):</span>
+                    <span>{record.createdAt ? new Date(record.createdAt).toLocaleTimeString() : "N/A"}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block">Finalized (Consensus State):</span>
+                    <span className="text-emerald-400">{record.finalizedAt ? new Date(record.finalizedAt).toLocaleTimeString() : "Confirmed"}</span>
+                  </div>
                 </div>
 
                 {record.plainText && (

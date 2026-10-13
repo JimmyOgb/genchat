@@ -40,7 +40,18 @@ describe("Deterministic SHA-256 Hashing Utilities", () => {
     const id = generateVerificationId();
     assert.match(id, /^genchat-v-[a-z0-9]+-[a-z0-9]+$/);
   });
+
+  it("canonicalizes question text by trimming and collapsing whitespace", async () => {
+    const { canonicalizeQuestion, computeCanonicalQuestionHash } = await import("../src/lib/utils/crypto.ts");
+    const raw = "  Should  Acme   Corp   be   paid?  \n";
+    assert.equal(canonicalizeQuestion(raw), "Should Acme Corp be paid?");
+    const hashA = await computeCanonicalQuestionHash(raw);
+    const hashB = await computeCanonicalQuestionHash("Should Acme Corp be paid?");
+    assert.equal(hashA, hashB);
+    assert.match(hashA, /^0x[a-f0-9]{64}$/);
+  });
 });
+
 
 // Test 2: AI Provider & Model Configuration
 describe("AI Provider Configuration & Model Integrity", () => {
