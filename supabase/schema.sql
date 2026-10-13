@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS public.verifications (
     message_id UUID REFERENCES public.messages(id) ON DELETE SET NULL,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     transaction_hash TEXT,
+    requester TEXT, -- wallet address that submitted request_verification (from on-chain record)
     question_title TEXT NOT NULL,
     question_hash TEXT NOT NULL,
     expected_evidence_hash TEXT NOT NULL,

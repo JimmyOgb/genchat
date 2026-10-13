@@ -74,9 +74,9 @@ On-Chain Auditable Record Stored in Contract State:
 | **Chain ID** | `61999` (`0xF22F`) |
 | **RPC Endpoint** | `https://studio.genlayer.com/api` |
 | **Explorer** | `https://studio.genlayer.com` |
-| **New Upgraded Contract** | `0x02DF9f0Cd7abF48Dea426725567b03032a65651A` |
-| **New Deployment Tx** | [`0xfddb9161348fb9a89133039d8f50778e0f3ca96bfb08bc5094d4ad124dd5af03`](https://studio.genlayer.com/tx/0xfddb9161348fb9a89133039d8f50778e0f3ca96bfb08bc5094d4ad124dd5af03) |
-| **Old Contract (Deprecated)** | `0x1b06F421f1d7228aC34f087f37309456D2434344` |
+| **Current Contract (active)** | `0x02DF9f0Cd7abF48Dea426725567b03032a65651A` |
+| **Deployment Tx** | [`0xfddb9161348fb9a89133039d8f50778e0f3ca96bfb08bc5094d4ad124dd5af03`](https://studio.genlayer.com/tx/0xfddb9161348fb9a89133039d8f50778e0f3ca96bfb08bc5094d4ad124dd5af03) |
+| **Superseded deployment (historical, refused by the app)** | `0x1b06F421f1d7228aC34f087f37309456D2434344` — legacy 7-argument interface; never used as a default or fallback |
 | **Runner Dependency** | `py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6` |
 
 ---
@@ -129,30 +129,83 @@ The protocol test suite (`contract/test_protocol_suite.mjs`) validates the secur
 
 ---
 
-## 6. Local Development
+## 6. Local Development & Configuration
 
 ### Prerequisites
-- Node.js 20+ (Node 24 tested)
+- Node.js 20+ (Node 24 tested; the offline tests import `.ts` sources directly, which needs Node 22.6+)
 - npm 10+
-- Python 3.11+ / 3.12+
+- Python 3.11+ / 3.12+ (contract tests and linter)
 
+### Environment configuration
 ```bash
-# 1. Clone repository
 git clone https://github.com/JimmyOgb/genchat.git
 cd genchat
-
-# 2. Install dependencies & build frontend
-cd frontend
-npm install
-npm run build
-
-# 3. Test contract with genvm linter
-cd ..
-python -c "import genvm_linter; print(genvm_linter.GenVMLinter().lint_file('contract/GenChatVerifier.py'))"
-
-# 4. Run real StudioNet evidence verification test
-node contract/test_real_studionet_evidence.mjs
+cp .env.example frontend/.env.local   # then fill in the secrets
 ```
+
+`NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS` is **required** and has **no default**. The frontend and the API
+routes both read this single variable, so they always target the same contract. If it is missing,
+malformed, the zero address, or a deprecated deployment, the app fails with a clear error instead of
+silently falling back. Production (e.g. Vercel) must set it explicitly to the current deployment:
+
+```env
+NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS=0x02DF9f0Cd7abF48Dea426725567b03032a65651A
+NEXT_PUBLIC_GENLAYER_CHAIN_ID=61999
+NEXT_PUBLIC_GENLAYER_RPC_URL=https://studio.genlayer.com/api
+```
+
+Do not set a separate `GENCHAT_CONTRACT_ADDRESS`; if present it must equal the public value.
+Server-only secrets (`GROQ_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SERPER_API_KEY`, `TAVILY_API_KEY`)
+never use the `NEXT_PUBLIC_` prefix and are never committed.
+
+### Request signature (8 arguments)
+Source of truth: [`contract/GenChatVerifier.py`](contract/GenChatVerifier.py). The frontend builds
+arguments in [`frontend/src/lib/genlayer/protocol.ts`](frontend/src/lib/genlayer/protocol.ts) (`buildRequestArgs`),
+and a unit test asserts the order matches the contract source exactly.
+
+```python
+request_verification(
+    verification_id: str,        # 1..64 chars, unique
+    question_title: str,         # claim / question, <= 500 chars
+    question_hash: str,          # hash of the claim, >= 32 chars
+    expected_evidence_hash: str, # 0x SHA-256 commitment over the canonicalized source(s)
+    source_urls_json: str,       # JSON array of http(s) URLs (non-empty)
+    criteria: str,               # evaluation criteria, <= 2000 chars
+    user_context_summary: str,   # NON-AUTHORITATIVE metadata only, <= 4000 chars
+    created_at: str,             # ISO timestamp, <= 60 chars
+) -> str                         # APPROVED | REJECTED | INCONCLUSIVE
+```
+
+### Evidence retrieval and hash verification
+Validators fetch every URL with `gl.nondet.web.get`, canonicalize (LF line endings, trimmed whitespace),
+join sources with `\n---\n`, and compute `0x` + SHA-256. `evidence_verified` is true only if retrieval
+succeeded **and** the hash equals `expected_evidence_hash`. `APPROVED` is impossible otherwise.
+
+### Record schema (`get_verification`)
+`verification_id`, `requester`, `question_title`, `question_hash`, `expected_evidence_hash`,
+`actual_evidence_hash`, `source_urls_json`, `evidence_verified`, `status` (`CONSENSUS`), `decision`,
+`confidence` (0-100), `rationale`, `user_context_summary`, `created_at`, `finalized_at`.
+The transaction hash and explorer URL are not returned by the contract; the client attaches them from the
+transaction receipt. The UI shows the record exactly as decoded from the contract; nothing is synthesized.
+
+Supabase `public.verifications` mirrors these fields. Existing databases: apply the additive,
+non-destructive migration [`supabase/migrations/20261013_add_verification_requester.sql`](supabase/migrations/20261013_add_verification_requester.sql).
+
+### Test commands
+| Command | Scope | Network |
+|---|---|---|
+| `npm run typecheck` / `npm run lint` | TypeScript / ESLint | offline |
+| `npm test` | Frontend unit + contract-consistency tests (`frontend/test/`) | **offline** |
+| `npm run contract:lint` | `genvm-lint` on the contract | offline (needs GenVM bundle cache) |
+| `npm run contract:test` | Direct-mode contract tests (`contract/tests/`) | **offline** (web/LLM inputs stubbed; contract logic is real) |
+| `npm run test:integration` | Real StudioNet transactions and consensus (`contract/test_*.mjs`) | **requires StudioNet** |
+| `npm run build` | Production build | offline |
+
+```bash
+cd frontend && npm install && cd ..
+npm run typecheck && npm run lint && npm test && npm run contract:test && npm run build
+```
+
 
 ---
 

@@ -67,5 +67,7 @@ export interface VerificationReceipt {
   evidenceVerified?: boolean;
   actualEvidenceHash?: string;
   plainText?: string;
+  /** Full record as decoded from the contract's get_verification (never synthesized). */
+  record?: VerificationRecord;
   error?: string;
 }

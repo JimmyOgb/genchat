@@ -1,6 +1,7 @@
 import { createClient } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
 import { getAddress, isAddress } from "viem";
+import { resolveContractAddress, STUDIONET_CHAIN_ID } from "./config";
 
 export const GENLAYER_CHAIN_ID = parseInt(
   process.env.NEXT_PUBLIC_GENLAYER_CHAIN_ID || "61999",
@@ -43,48 +44,33 @@ export function validateGenLayerConfig(customAddress?: string): GenLayerConfigVa
     process.env.GENLAYER_RPC_URL ||
     "https://studio.genlayer.com/api";
 
-  const rawAddress =
-    customAddress ||
-    process.env.NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS ||
-    process.env.GENCHAT_CONTRACT_ADDRESS ||
-    "0x1b06F421f1d7228aC34f087f37309456D2434344";
+  // Explicit configuration only: there is NO fallback contract address.
+  // Property accesses are literal so Next.js can inline NEXT_PUBLIC_* in the browser bundle.
+  const resolved = resolveContractAddress(
+    {
+      NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS: process.env.NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS,
+      GENCHAT_CONTRACT_ADDRESS: process.env.GENCHAT_CONTRACT_ADDRESS,
+    },
+    customAddress
+  );
 
-  if (!rawAddress || rawAddress === "undefined" || rawAddress === "null" || typeof rawAddress !== "string") {
+  if (!resolved.isValid || !resolved.contractAddress) {
+    return { isValid: false, chainId, rpcUrl, error: resolved.error };
+  }
+
+  if (chainId !== STUDIONET_CHAIN_ID) {
     return {
       isValid: false,
+      contractAddress: resolved.contractAddress,
       chainId,
       rpcUrl,
-      error: "GenChat contract address is missing. NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS is not set.",
+      error: `Invalid chain ID: ${chainId}. GenChat verification requires GenLayer StudioNet (Chain ID: ${STUDIONET_CHAIN_ID}).`,
     };
   }
 
-  const trimmed = rawAddress.trim();
-  if (!isAddress(trimmed, { strict: false })) {
-    return {
-      isValid: false,
-      chainId,
-      rpcUrl,
-      error: `Invalid GenChat contract address: "${rawAddress}". Must be a valid 20-byte Ethereum address.`,
-    };
-  }
-
-  if (chainId !== 61999) {
-    return {
-      isValid: false,
-      contractAddress: getAddress(trimmed),
-      chainId,
-      rpcUrl,
-      error: `Invalid chain ID: ${chainId}. GenChat verification requires GenLayer StudioNet (Chain ID: 61999).`,
-    };
-  }
-
-  return {
-    isValid: true,
-    contractAddress: getAddress(trimmed),
-    chainId,
-    rpcUrl,
-  };
+  return { isValid: true, contractAddress: resolved.contractAddress, chainId, rpcUrl };
 }
+
 
 export function getContractAddress(): `0x${string}` {
   const validation = validateGenLayerConfig();

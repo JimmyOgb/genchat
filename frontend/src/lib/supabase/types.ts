@@ -86,6 +86,7 @@ export interface Database {
           message_id: string | null;
           user_id: string;
           transaction_hash: string | null;
+          requester: string | null;
           question_title: string;
           question_hash: string;
           expected_evidence_hash: string;
@@ -107,6 +108,7 @@ export interface Database {
           message_id?: string | null;
           user_id: string;
           transaction_hash?: string | null;
+          requester?: string | null;
           question_title: string;
           question_hash: string;
           expected_evidence_hash: string;
@@ -128,6 +130,7 @@ export interface Database {
           message_id?: string | null;
           user_id?: string;
           transaction_hash?: string | null;
+          requester?: string | null;
           question_title?: string;
           question_hash?: string;
           expected_evidence_hash?: string;

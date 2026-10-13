@@ -27,7 +27,6 @@ import {
   getConnectedChainId,
   isStudioNet,
   switchToStudioNet,
-  getExplorerUrl,
   validateGenLayerConfig,
   GENLAYER_CHAIN_ID,
   GENLAYER_CHAIN_ID_HEX,
@@ -268,27 +267,13 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
 
       setTxHash(receipt.transactionHash);
 
-      // 4. Consensus Finalized
-      const verifiedRecord: VerificationRecord = {
-        verificationId,
-        requester: userAddress,
-        questionTitle,
-        questionHash,
-        expectedEvidenceHash: verificationRequest.expectedEvidenceHash,
-        actualEvidenceHash: receipt.actualEvidenceHash || "",
-        sourceUrls,
-        evidenceVerified: Boolean(receipt.evidenceVerified),
-        status: "CONSENSUS",
-        decision: (receipt.decision as VerificationDecision) || "APPROVED",
-        confidence: receipt.confidence || 90,
-        rationale: receipt.rationale || "GenLayer validators independently verified source evidence and reached consensus.",
-        userContextSummary: verificationRequest.userContextSummary,
-        plainText: receipt.plainText,
-        createdAt: verificationRequest.createdAt,
-        finalizedAt: new Date().toISOString(),
-        transactionHash: receipt.transactionHash,
-        explorerUrl: getExplorerUrl(receipt.transactionHash),
-      };
+      // 4. Consensus finalized: use the record exactly as decoded from the contract.
+      //    No decision/confidence/rationale/timestamps are synthesized client-side.
+      if (!receipt.record) {
+        throw new Error("Finalization failure: contract record was not returned.");
+      }
+      const verifiedRecord: VerificationRecord = receipt.record;
+
 
       setRecord(verifiedRecord);
       setStatus("FINALIZED");

@@ -467,6 +467,7 @@ export default function ChatPage() {
           conversation_id: activeConversationId,
           user_id: userId,
           transaction_hash: record.transactionHash,
+          requester: record.requester,
           question_title: record.questionTitle,
           question_hash: record.questionHash,
           expected_evidence_hash: record.expectedEvidenceHash,

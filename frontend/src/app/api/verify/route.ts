@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GenLayerVerifierService } from "@/lib/genlayer/verifier";
+import { validateGenLayerConfig } from "@/lib/genlayer/client";
+import { buildRequestArgs, REQUEST_VERIFICATION_PARAMS } from "@/lib/genlayer/protocol";
 
 export const runtime = "nodejs";
 
@@ -8,18 +10,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action, request, verificationId } = body;
 
-    const verifier = new GenLayerVerifierService();
-
-    if (!verifier.isConfigured()) {
+    const config = validateGenLayerConfig();
+    if (!config.isValid) {
       return NextResponse.json(
         {
-          error:
-            "GENCHAT_CONTRACT_ADDRESS is not configured in server environment. Please set GENCHAT_CONTRACT_ADDRESS.",
+          error: config.error || "GenChat contract configuration is invalid.",
           configured: false,
         },
         { status: 503 }
       );
     }
+
+    const verifier = new GenLayerVerifierService();
 
     if (action === "submit") {
       // The server does NOT hold user wallet keys and cannot sign blockchain transactions.
@@ -41,11 +43,24 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+      let args: string[];
+      try {
+        args = buildRequestArgs(request);
+      } catch (validationErr: any) {
+        return NextResponse.json(
+          { success: false, error: validationErr.message },
+          { status: 400 }
+        );
+      }
       return NextResponse.json({
         success: true,
         contractAddress: verifier.getContractAddress(),
+        method: "request_verification",
+        params: REQUEST_VERIFICATION_PARAMS,
+        args,
         prepared: true,
       });
+
     }
 
     if (action === "get") {

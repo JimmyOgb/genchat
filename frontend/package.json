@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/unit.test.mjs"
+    "test": "node --test test/unit.test.mjs test/contract-consistency.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

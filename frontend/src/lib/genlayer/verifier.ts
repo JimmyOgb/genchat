@@ -1,5 +1,7 @@
 import { getAddress, isAddress } from "viem";
 import { getContractAddress, getExplorerUrl, getGenLayerClient } from "./client";
+import { resolveContractAddress } from "./config";
+import { buildRequestArgs, decodeVerificationRecord } from "./protocol";
 import type {
   VerificationDecision,
   VerificationReceipt,
@@ -13,12 +15,13 @@ export class GenLayerVerifierService {
 
   constructor(contractAddress?: string) {
     if (contractAddress) {
-      if (!isAddress(contractAddress, { strict: false })) {
+      const resolved = resolveContractAddress({}, contractAddress);
+      if (!resolved.isValid || !resolved.contractAddress) {
         throw new Error(
-          `Invalid contract address provided to GenLayerVerifierService: "${contractAddress}". Must be a valid 20-byte Ethereum address.`
+          resolved.error || `Invalid contract address provided to GenLayerVerifierService: "${contractAddress}".`
         );
       }
-      this.contractAddress = getAddress(contractAddress);
+      this.contractAddress = resolved.contractAddress;
     } else {
       this.contractAddress = getContractAddress();
     }
@@ -43,7 +46,7 @@ export class GenLayerVerifierService {
   ): Promise<VerificationReceipt> {
     if (!this.isConfigured()) {
       throw new Error(
-        "GENCHAT_CONTRACT_ADDRESS is not set. Please deploy the contract to StudioNet and set NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS in .env.local."
+        "NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS is not set. Configure the current StudioNet deployment (see .env.example)."
       );
     }
 
@@ -67,16 +70,7 @@ export class GenLayerVerifierService {
         account: client.account,
         address: this.contractAddress,
         functionName: "request_verification",
-        args: [
-          request.verificationId,
-          request.questionTitle,
-          request.questionHash,
-          request.expectedEvidenceHash,
-          JSON.stringify(request.sourceUrls),
-          request.criteria,
-          request.userContextSummary,
-          request.createdAt,
-        ],
+        args: buildRequestArgs(request),
         value: BigInt(0),
       });
 
@@ -128,36 +122,22 @@ export class GenLayerVerifierService {
         txHash
       );
 
-      // 3. Query the finalized on-chain state for real consensus decision & plaintext
-      let decision: VerificationDecision = "INCONCLUSIVE";
-      let confidence = 0;
-      let rationale = "";
-      let plainText = "";
-      let evidenceVerified = false;
-      let actualEvidenceHash = "";
-
+      // 3. Read the finalized on-chain record. If it cannot be read or decoded, fail
+      //    loudly instead of inventing a decision.
+      let record: VerificationRecord;
       try {
-        const record = await this.getVerificationRecord(request.verificationId);
-        decision = record.decision || "INCONCLUSIVE";
-        confidence = record.confidence ?? 0;
-        rationale = record.rationale || "";
-        evidenceVerified = record.evidenceVerified;
-        actualEvidenceHash = record.actualEvidenceHash;
-        plainText = record.plainText || `${decision} — ${confidence}% confidence. ${rationale}`;
+        record = await this.getVerificationRecord(request.verificationId);
       } catch (readErr: any) {
-        console.warn("Could not read back immediate record state:", readErr);
-        try {
-          plainText = await this.getVerificationText(request.verificationId);
-          decision = await this.getVerificationDecision(request.verificationId);
-          rationale = plainText;
-        } catch {
-          throw new Error("Finalization failure: Could not retrieve final verification record from GenLayer contract.");
-        }
+        throw new Error(
+          `Finalization failure: Could not retrieve a valid verification record from the GenLayer contract (${readErr?.message || "unknown error"}).`
+        );
       }
+      record.transactionHash = txHash;
+      record.explorerUrl = getExplorerUrl(txHash);
 
-      if (decision === "APPROVED") {
+      if (record.decision === "APPROVED") {
         onProgress?.("VERIFIED", "Verification confirmed on-chain (Evidence Verified).", txHash);
-      } else if (decision === "REJECTED") {
+      } else if (record.decision === "REJECTED") {
         onProgress?.("REJECTED", "Verification rejected by validators on-chain.", txHash);
       } else {
         onProgress?.("INCONCLUSIVE", "Verification inconclusive on-chain.", txHash);
@@ -166,13 +146,15 @@ export class GenLayerVerifierService {
       return {
         status: "ACCEPTED",
         transactionHash: txHash,
-        decision,
-        confidence,
-        rationale,
-        evidenceVerified,
-        actualEvidenceHash,
-        plainText,
+        decision: record.decision,
+        confidence: record.confidence,
+        rationale: record.rationale,
+        evidenceVerified: record.evidenceVerified,
+        actualEvidenceHash: record.actualEvidenceHash,
+        plainText: record.plainText,
+        record,
       };
+
     } catch (err: any) {
       console.error("GenLayer transaction error:", err);
       if (err.code === 4001 || /reject|denied|cancelled|user rejected/i.test(err.message)) {
@@ -200,64 +182,30 @@ export class GenLayerVerifierService {
    */
   async getVerificationRecord(verificationId: string): Promise<VerificationRecord> {
     if (!this.isConfigured()) {
-      throw new Error("GENCHAT_CONTRACT_ADDRESS is not set.");
+      throw new Error("NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS is not set.");
     }
 
     const client = getGenLayerClient();
-    const rawData: any = await client.readContract({
+    const rawData: unknown = await client.readContract({
       address: this.contractAddress,
       functionName: "get_verification",
       args: [verificationId],
     });
 
-    const get = (key: string): any => {
-      if (!rawData) return undefined;
-      if (rawData instanceof Map) return rawData.get(key);
-      return rawData[key];
-    };
+    // Strict decode against the contract's actual schema (throws on malformed data).
+    const record = decodeVerificationRecord(rawData);
 
-    const rawDecision = get("decision");
-    const decision = (rawDecision as VerificationDecision) || "PENDING";
-    const confidence = Number(get("confidence") || 0);
-    const rationale = get("rationale") || "";
-    const evidenceVerified = Boolean(get("evidence_verified"));
-    const actualEvidenceHash = get("actual_evidence_hash") || "";
-    const expectedEvidenceHash = get("expected_evidence_hash") || "";
-    let sourceUrls: string[] = [];
+    // Plaintext is an optional convenience view; omit it if unavailable rather than fabricating.
     try {
-      sourceUrls = JSON.parse(get("source_urls_json") || "[]");
+      record.plainText = await this.getVerificationText(verificationId);
     } catch {
-      sourceUrls = [];
+      // leave plainText undefined
     }
 
-    // Fetch plaintext directly from contract's dedicated public view method
-    let plainText = `${decision} — ${confidence}% confidence. ${rationale}`;
-    try {
-      plainText = await this.getVerificationText(verificationId);
-    } catch {
-      // Fallback to formatted string if separate getter call encounters transient network issue
-    }
-
-    return {
-      verificationId: get("verification_id") || verificationId,
-      requester: get("requester") || "",
-      questionTitle: get("question_title") || "",
-      questionHash: get("question_hash") || "",
-      expectedEvidenceHash,
-      actualEvidenceHash,
-      sourceUrls,
-      evidenceVerified,
-      status: get("status") || "CONSENSUS",
-      decision,
-      confidence,
-      rationale,
-      userContextSummary: get("user_context_summary") || "",
-      plainText,
-      createdAt: get("created_at") || "",
-      finalizedAt: get("finalized_at") || "",
-      explorerUrl: getExplorerUrl(),
-    };
+    record.explorerUrl = getExplorerUrl();
+    return record;
   }
+
 
   /**
    * Reads human-readable plaintext verification string from the contract.
@@ -265,7 +213,7 @@ export class GenLayerVerifierService {
    */
   async getVerificationText(verificationId: string): Promise<string> {
     if (!this.isConfigured()) {
-      throw new Error("GENCHAT_CONTRACT_ADDRESS is not set.");
+      throw new Error("NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS is not set.");
     }
 
     const client = getGenLayerClient();
@@ -284,7 +232,7 @@ export class GenLayerVerifierService {
    */
   async getVerificationDecision(verificationId: string): Promise<VerificationDecision> {
     if (!this.isConfigured()) {
-      throw new Error("GENCHAT_CONTRACT_ADDRESS is not set.");
+      throw new Error("NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS is not set.");
     }
 
     const client = getGenLayerClient();

@@ -1,6 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+
+// Single source of truth for the current contract: contract/deployment.json
+const CONTRACT_ADDRESS_FROM_DEPLOYMENT = JSON.parse(
+  readFileSync(new URL("../../contract/deployment.json", import.meta.url), "utf8")
+).contractAddress;
 
 // Test 1: Deterministic Hashing Utilities
 describe("Deterministic SHA-256 Hashing Utilities", () => {
@@ -291,10 +297,10 @@ describe("StudioNet Network Safety & Chain Validation", () => {
     assert.equal(isStudioNet(undefined), false);
   });
 
-  it("pins exact deployed contract address on StudioNet", () => {
-    const CONTRACT_ADDRESS = "0x1b06F421f1d7228aC34f087f37309456D2434344";
+  it("pins exact deployed contract address on StudioNet (current deployment.json)", () => {
+    const CONTRACT_ADDRESS = CONTRACT_ADDRESS_FROM_DEPLOYMENT;
     assert.match(CONTRACT_ADDRESS, /^0x[a-fA-F0-9]{40}$/);
-    assert.equal(CONTRACT_ADDRESS.toLowerCase(), "0x1b06f421f1d7228ac34f087f37309456d2434344");
+    assert.equal(CONTRACT_ADDRESS.toLowerCase(), "0x02df9f0cd7abf48dea426725567b03032a65651a");
   });
 });
 
@@ -472,10 +478,10 @@ describe("Environment Variable Classification & Secret Leak Prevention", () => {
 describe("GenLayer Contract Address Validation & Viem Integration (Regression Prevention)", () => {
   it("validates and checksums valid StudioNet contract address", async () => {
     const { getAddress, isAddress } = await import("viem");
-    const rawAddress = "0x1b06F421f1d7228aC34f087f37309456D2434344";
+    const rawAddress = CONTRACT_ADDRESS_FROM_DEPLOYMENT;
     assert.equal(isAddress(rawAddress), true, "Address must be recognized as valid address");
     const checksummed = getAddress(rawAddress);
-    assert.equal(checksummed, "0x1b06F421f1d7228aC34f087f37309456D2434344");
+    assert.equal(checksummed, CONTRACT_ADDRESS_FROM_DEPLOYMENT);
   });
 
   it("detects and rejects undefined, null, or malformed contract addresses", async () => {
@@ -507,7 +513,7 @@ describe("GenLayer Contract Address Validation & Viem Integration (Regression Pr
 
   it("verifies StudioNet chain ID 61999 and contract address compatibility", () => {
     const expectedChainId = 61999;
-    const expectedContract = "0x1b06F421f1d7228aC34f087f37309456D2434344";
+    const expectedContract = CONTRACT_ADDRESS_FROM_DEPLOYMENT;
     assert.equal(expectedChainId, 61999);
     assert.match(expectedContract, /^0x[a-fA-F0-9]{40}$/);
   });
@@ -559,7 +565,7 @@ describe("Browser Wallet Connection & GenLayer RPC Routing Safety (Requirement 1
     // Calling eth_sendTransaction routes directly to the wallet provider
     const res = await client.request({
       method: "eth_sendTransaction",
-      params: [{ from: userWallet, to: "0x1b06F421f1d7228aC34f087f37309456D2434344", data: "0x" }],
+      params: [{ from: userWallet, to: CONTRACT_ADDRESS_FROM_DEPLOYMENT, data: "0x" }],
     });
 
     assert.equal(res, "0xtx_hash_from_wallet");
@@ -567,7 +573,7 @@ describe("Browser Wallet Connection & GenLayer RPC Routing Safety (Requirement 1
   });
 
   it("verifies real StudioNet contract has valid deployed address and methods", async () => {
-    const contractAddress = "0x1b06F421f1d7228aC34f087f37309456D2434344";
+    const contractAddress = CONTRACT_ADDRESS_FROM_DEPLOYMENT;
     const { isAddress, getAddress } = await import("viem");
     assert.equal(isAddress(contractAddress), true);
     assert.equal(getAddress(contractAddress), contractAddress);
