@@ -311,7 +311,7 @@ describe("StudioNet Network Safety & Chain Validation", () => {
   it("pins exact deployed contract address on StudioNet (current deployment.json)", () => {
     const CONTRACT_ADDRESS = CONTRACT_ADDRESS_FROM_DEPLOYMENT;
     assert.match(CONTRACT_ADDRESS, /^0x[a-fA-F0-9]{40}$/);
-    assert.equal(CONTRACT_ADDRESS.toLowerCase(), "0x02df9f0cd7abf48dea426725567b03032a65651a");
+    assert.equal(CONTRACT_ADDRESS.toLowerCase(), "0x4282234bf42f8e73de096e2f3c22a31f3b80e0f5");
   });
 });
 

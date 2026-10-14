@@ -16,6 +16,7 @@ export const STUDIONET_CHAIN_ID = 61999;
  */
 export const DEPRECATED_CONTRACT_ADDRESSES: readonly string[] = [
   "0x1b06F421f1d7228aC34f087f37309456D2434344",
+  "0x02DF9f0Cd7abF48Dea426725567b03032a65651A", // pre-V2 deployment: 6,000-char truncation, untrusted question hash, copied timestamps
 ];
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";

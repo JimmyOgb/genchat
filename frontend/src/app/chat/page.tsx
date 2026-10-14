@@ -480,8 +480,9 @@ export default function ChatPage() {
           confidence: record.confidence,
           rationale: record.rationale,
           explorer_url: record.explorerUrl,
-          created_at: record.createdAt,
-          finalized_at: record.finalizedAt,
+          // created_at / finalized_at are intentionally NOT written from the contract record:
+          // the requester timestamp is untrusted and the contract exposes no finalization time.
+          // Supabase's own row default timestamps the insert; finalized_at stays NULL.
         });
       } catch (err: any) {
         console.warn("Failed to persist verification to Supabase:", err.message);

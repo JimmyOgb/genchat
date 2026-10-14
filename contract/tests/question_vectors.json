@@ -1,0 +1,14 @@
+[
+  {"name": "plain", "input": "Should Acme be paid?", "canonical": "Should Acme be paid?"},
+  {"name": "outer-and-inner-ascii-whitespace", "input": "  Custom   question \t about\n\r\npayment  ", "canonical": "Custom question about payment"},
+  {"name": "vertical-tab-form-feed", "input": "a\u000bb\u000cc", "canonical": "a b c"},
+  {"name": "nbsp-and-unicode-spaces", "input": "\u00a0a\u00a0\u2003b\u202f\u205fc\u3000", "canonical": "a b c"},
+  {"name": "line-and-paragraph-separators", "input": "a\u2028b\u2029c", "canonical": "a b c"},
+  {"name": "zero-width-nbsp-feff-is-whitespace-in-js", "input": "\ufeffa\ufeffb\ufeff", "canonical": "a b"},
+  {"name": "python-only-separators-are-NOT-whitespace", "input": "a\u001cb\u0085c", "canonical": "a\u001cb\u0085c"},
+  {"name": "zero-width-space-is-NOT-whitespace", "input": "a\u200bb", "canonical": "a\u200bb"},
+  {"name": "case-is-preserved", "input": "  MiXeD   CaSe ", "canonical": "MiXeD CaSe"},
+  {"name": "empty", "input": "", "canonical": ""},
+  {"name": "only-whitespace", "input": " \t\n\u00a0\u3000 ", "canonical": ""},
+  {"name": "non-bmp-and-combining-preserved", "input": "  caf\u0065\u0301  \ud83d\ude00  ok ", "canonical": "caf\u0065\u0301 \ud83d\ude00 ok"}
+]

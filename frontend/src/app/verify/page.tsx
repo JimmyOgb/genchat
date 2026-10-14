@@ -254,9 +254,7 @@ export default function VerificationLedgerPage() {
                       </span>
                     </div>
                     <span className="text-[11px] text-zinc-500 font-mono">
-                      {item.finalizedAt
-                        ? `Finalized: ${new Date(item.finalizedAt).toLocaleDateString()}`
-                        : `Submitted: ${new Date(item.createdAt).toLocaleDateString()} (Requester TS)`}
+                      {`Tx time (GenLayer runtime): ${item.txDatetime ? new Date(item.txDatetime).toLocaleString() : "unavailable"}`}
                     </span>
                   </div>
 

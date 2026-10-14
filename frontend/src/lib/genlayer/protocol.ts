@@ -1,6 +1,23 @@
 import type { VerificationDecision, VerificationRecord, VerificationRequest } from "./types";
 
 /**
+ * Pure canonical question function matching contract/GenChatVerifier.py exactly.
+ */
+export function canonicalizeQuestion(raw: string): string {
+  if (!raw) return "";
+  return raw.trim().replace(/\s+/g, " ");
+}
+
+/** Limits enforced by the contract (see get_limits()). */
+export const EVIDENCE_LIMITS = {
+  maxSourceUrls: 5,
+  maxUrlLength: 2048,
+  maxResponseBytes: 16384,
+  maxAggregateEvidenceBytes: 32768,
+  supportedContentTypes: ["text/plain", "text/markdown", "text/csv", "application/json"],
+} as const;
+
+/**
  * Wire-level protocol for GenChatVerifier (contract/GenChatVerifier.py).
  * Pure functions, no relative runtime imports, so they can be unit-tested offline.
  */
@@ -28,7 +45,8 @@ export type RequestVerificationArgs = [
   created_at: string,
 ];
 
-const HASH_RE = /^(0x)?[0-9a-fA-F]{64}$/;
+/** Hash policy (mirrors contract parse_hash): literal "0x" + exactly 64 hex digits; either hex case; no whitespace. */
+export const HASH_RE = /^0x[0-9a-fA-F]{64}$/;
 
 /**
  * Validates a request against the contract's input rules and serializes it
@@ -41,18 +59,18 @@ export function buildRequestArgs(request: VerificationRequest): RequestVerificat
   if (!id) throw new Error("verificationId is required");
   if (id.length > 64) throw new Error("verificationId exceeds 64 characters");
 
-  const title = (request.questionTitle ?? "").trim();
+  const title = canonicalizeQuestion(request.questionTitle ?? "");
   if (!title) throw new Error("questionTitle is required");
   if (title.length > 500) throw new Error("questionTitle exceeds 500 characters");
 
-  const questionHash = (request.questionHash ?? "").trim().toLowerCase();
+  const questionHash = request.questionHash ?? "";
   if (!HASH_RE.test(questionHash)) {
-    throw new Error("questionHash must be a valid 32-byte cryptographic SHA-256 hash");
+    throw new Error("questionHash must be 0x followed by exactly 64 hexadecimal digits");
   }
 
-  const expected = (request.expectedEvidenceHash ?? "").trim();
+  const expected = request.expectedEvidenceHash ?? "";
   if (!HASH_RE.test(expected)) {
-    throw new Error("expectedEvidenceHash is required and must be a 32-byte SHA-256 hex hash");
+    throw new Error("expectedEvidenceHash must be 0x followed by exactly 64 hexadecimal digits");
   }
 
   const urls = (request.sourceUrls ?? []).map((u) => (typeof u === "string" ? u.trim() : u));
@@ -60,10 +78,14 @@ export function buildRequestArgs(request: VerificationRequest): RequestVerificat
     throw new Error("At least one source URL is required; caller summaries cannot replace source evidence");
   }
   for (const u of urls) {
-    if (typeof u !== "string" || !/^https?:\/\/\S+$/.test(u)) {
-      throw new Error("All source URLs must be valid http/https URLs");
+    if (typeof u !== "string" || !/^https?:\/\/[\x21-\x7e]+$/i.test(u) || u.length > EVIDENCE_LIMITS.maxUrlLength) {
+      throw new Error(`All source URLs must be printable-ASCII http/https URLs of at most ${EVIDENCE_LIMITS.maxUrlLength} characters`);
     }
   }
+  if (urls.length > EVIDENCE_LIMITS.maxSourceUrls) {
+    throw new Error(`Too many source URLs (maximum ${EVIDENCE_LIMITS.maxSourceUrls})`);
+  }
+  if (new Set(urls).size !== urls.length) throw new Error("Duplicate source URL");
 
   const criteria = (request.criteria ?? "").trim();
   if (!criteria) throw new Error("criteria is required");
@@ -72,13 +94,14 @@ export function buildRequestArgs(request: VerificationRequest): RequestVerificat
   const summary = (request.userContextSummary ?? "").trim();
   if (summary.length > 4000) throw new Error("userContextSummary exceeds 4000 characters");
 
+  // Untrusted requester metadata; the contract records it as created_at_untrusted.
   const createdAt = (request.createdAt ?? "").trim();
   if (!createdAt || createdAt.length > 60) throw new Error("createdAt is required (max 60 characters)");
 
   return [
     id,
     title,
-    questionHash,
+    questionHash.toLowerCase(),
     expected.toLowerCase(),
     JSON.stringify(urls),
     criteria,
@@ -146,7 +169,7 @@ export function decodeVerificationRecord(raw: unknown): VerificationRecord {
     confidence,
     rationale: str("rationale"),
     userContextSummary: str("user_context_summary"),
-    createdAt: str("created_at"),
-    finalizedAt: str("finalized_at"),
+    createdAtUntrusted: str("created_at_untrusted"),
+    txDatetime: str("tx_datetime"),
   };
 }

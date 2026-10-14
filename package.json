@@ -11,9 +11,10 @@
     "lint": "npm --prefix frontend run lint",
     "typecheck": "npm --prefix frontend run typecheck",
     "test": "npm --prefix frontend run test",
-    "contract:lint": "genvm-lint lint contract/GenChatVerifier.py",
+    "contract:lint": "genvm-lint lint contract/GenChatVerifier.py && genvm-lint check contract/GenChatVerifier.py",
     "contract:test": "pytest contract/tests -v",
-    "test:integration": "node contract/test_real_studionet_evidence.mjs && node contract/test_protocol_suite.mjs"
+    "test:integration": "node contract/live_studionet_suite.mjs",
+    "contract:verify-source": "node contract/verify_deployed_source.mjs"
   },
   "keywords": [
     "genchat",

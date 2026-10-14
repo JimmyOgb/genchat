@@ -72,7 +72,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
     "Independently verify whether the referenced source document unequivocally supports the claim. Decide APPROVED if fully supported, REJECTED if contradicted, or INCONCLUSIVE if ambiguous or unverified."
   );
   const [userDescription, setUserDescription] = useState("");
-  const [expectedHashCommitment, setExpectedHashCommitment] = useState("0xad42acaf7e1139ce648a9c5561d1e00e777faf848941e9ee50c3f69792882122");
+  const [expectedHashCommitment, setExpectedHashCommitment] = useState("");
 
   const statusRef = React.useRef(status);
   statusRef.current = status;
@@ -192,6 +192,23 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
     }
   };
 
+  const handleComputeCommitment = async () => {
+    setErrorMessage(null);
+    const urls = [sourceUrl.trim(), secondaryUrl.trim()].filter(Boolean);
+    try {
+      const res = await fetch("/api/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "commitment", sourceUrls: urls }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Could not compute commitment");
+      setExpectedHashCommitment(data.commitment);
+    } catch (e: any) {
+      setErrorMessage(e.message || "Could not compute commitment");
+    }
+  };
+
   // User explicitly clicks "Submit to GenLayer"
   const handleStartVerification = async () => {
     setErrorMessage(null);
@@ -222,7 +239,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
     }
 
     const cleanSourceUrl = sourceUrl.trim();
-    if (!cleanSourceUrl || !cleanSourceUrl.startsWith("http")) {
+    if (!/^https?:\/\//i.test(cleanSourceUrl)) {
       setErrorMessage("A valid public HTTP/HTTPS Evidence Source URL is required. GenLayer validators must independently retrieve this source.");
       return;
     }
@@ -243,7 +260,7 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
         verificationId,
         questionTitle,
         questionHash,
-        expectedEvidenceHash: expectedHashCommitment.trim().toLowerCase(),
+        expectedEvidenceHash: expectedHashCommitment.trim(),
         sourceUrls,
         criteria: criteria.trim(),
         userContextSummary: userDescription.trim() || message.content.slice(0, 1000),
@@ -433,9 +450,21 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
               type="text"
               value={expectedHashCommitment}
               onChange={(e) => setExpectedHashCommitment(e.target.value)}
-              placeholder="0x... (Canonical source content hash)"
+              placeholder="0x + 64 hex digits (GENCHAT-EVIDENCE-V2 commitment over ALL sources)"
               className="w-full px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 font-mono focus:outline-none focus:border-amber-500"
             />
+            <button
+              type="button"
+              onClick={handleComputeCommitment}
+              className="text-[10px] text-amber-400 hover:text-amber-300 underline"
+            >
+              Compute commitment from the source URL(s) (helper only; validators re-fetch independently)
+            </button>
+            <p className="text-[10px] text-zinc-500">
+              A matching commitment proves only that validators saw the same bytes. It does not prove the
+              sources are truthful, complete or unbiased. Limits: up to 5 URLs, 16 KiB per response,
+              32 KiB total; text/plain, text/markdown, text/csv or application/json only.
+            </p>
           </div>
 
           <div className="space-y-1">
@@ -609,12 +638,12 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
 
                 <div className="pt-1 border-t border-zinc-800/60 grid grid-cols-2 gap-2 text-[10px] font-mono text-zinc-400">
                   <div>
-                    <span className="text-zinc-500 block">Requester Timestamp (Metadata):</span>
-                    <span>{record.createdAt ? new Date(record.createdAt).toLocaleTimeString() : "N/A"}</span>
+                    <span className="text-zinc-500 block">Requester Timestamp (UNTRUSTED, caller-supplied):</span>
+                    <span>{record.createdAtUntrusted || "N/A"}</span>
                   </div>
                   <div>
-                    <span className="text-zinc-500 block">Finalized (Consensus State):</span>
-                    <span className="text-emerald-400">{record.finalizedAt ? new Date(record.finalizedAt).toLocaleTimeString() : "Confirmed"}</span>
+                    <span className="text-zinc-500 block">Tx time (GenLayer runtime; not a finality timestamp):</span>
+                    <span className="text-emerald-400">{record.txDatetime || "unavailable"}</span>
                   </div>
                 </div>
 

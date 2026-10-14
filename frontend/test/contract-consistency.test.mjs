@@ -12,13 +12,15 @@ import {
   isDeprecatedContractAddress,
   DEPRECATED_CONTRACT_ADDRESSES,
 } from "../src/lib/genlayer/config.ts";
+import { EVIDENCE_LIMITS } from "../src/lib/utils/crypto.ts";
 import {
   buildRequestArgs,
   decodeVerificationRecord,
   REQUEST_VERIFICATION_PARAMS,
 } from "../src/lib/genlayer/protocol.ts";
 
-const CURRENT = "0x02DF9f0Cd7abF48Dea426725567b03032a65651A";
+const CURRENT = "0x4282234BF42F8e73De096E2f3C22A31F3b80e0f5";
+const DEPRECATED_2 = "0x02DF9f0Cd7abF48Dea426725567b03032a65651A";
 const DEPRECATED = "0x1b06F421f1d7228aC34f087f37309456D2434344";
 const read = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const contractSrc = read("../../contract/GenChatVerifier.py");
@@ -54,8 +56,9 @@ function sampleContractRecord(overrides = {}) {
     confidence: 91,
     rationale: "Source supports the claim.",
     user_context_summary: "ctx",
-    created_at: "2026-10-13T00:00:00.000Z",
-    finalized_at: "2026-10-13T00:00:00.000Z",
+    evidence_format: "GENCHAT-EVIDENCE-V2",
+    created_at_untrusted: "2026-10-13T00:00:00.000Z",
+    tx_datetime: "2026-10-14T20:00:00Z",
     ...overrides,
   };
 }
@@ -99,6 +102,8 @@ describe("Contract configuration (offline)", () => {
       assert.equal(resolveContractAddress({}, v).isValid, false);
     }
     assert.equal(isDeprecatedContractAddress(CURRENT), false);
+    assert.equal(isDeprecatedContractAddress(DEPRECATED_2), true);
+    assert.equal(resolveContractAddress({ NEXT_PUBLIC_GENCHAT_CONTRACT_ADDRESS: DEPRECATED_2 }).isValid, false);
   });
 
   it("accepts and checksums the current deployment", () => {
@@ -213,6 +218,29 @@ describe("request_verification signature (offline)", () => {
   it("normalizes hashes to lowercase like the contract does", () => {
     const upper = "0x" + "AB".repeat(32);
     assert.equal(buildRequestArgs(sampleRequest({ expectedEvidenceHash: upper }))[3], upper.toLowerCase());
+    assert.equal(buildRequestArgs(sampleRequest({ questionHash: upper }))[2], upper.toLowerCase());
+  });
+
+  it("hash policy mirrors the contract: literal 0x + exactly 64 hex digits, no whitespace", () => {
+    const h = "ab".repeat(32);
+    for (const bad of [h, "0X" + h, " 0x" + h, "0x" + h + " ", "0x" + h.slice(1), "0x" + h + "a", "0x" + "g".repeat(64), ""]) {
+      assert.throws(() => buildRequestArgs(sampleRequest({ questionHash: bad })), /questionHash/, JSON.stringify(bad));
+      assert.throws(() => buildRequestArgs(sampleRequest({ expectedEvidenceHash: bad })), /expectedEvidenceHash/, JSON.stringify(bad));
+    }
+  });
+
+  it("serializes the CANONICAL question and enforces URL limits like the contract", () => {
+    const args = buildRequestArgs(sampleRequest({ questionTitle: "  a \t b\n c  " }));
+    assert.equal(args[1], "a b c");
+    const urls = (n) => Array.from({ length: n }, (_, i) => `https://example.com/${i}`);
+    assert.equal(JSON.parse(buildRequestArgs(sampleRequest({ sourceUrls: urls(EVIDENCE_LIMITS.maxSourceUrls) }))[4]).length, 5);
+    assert.throws(() => buildRequestArgs(sampleRequest({ sourceUrls: urls(6) })), /Too many/);
+    const prefix = "https://example.com/";
+    const atLimit = prefix + "a".repeat(EVIDENCE_LIMITS.maxUrlLength - prefix.length);
+    assert.doesNotThrow(() => buildRequestArgs(sampleRequest({ sourceUrls: [atLimit] })));
+    assert.throws(() => buildRequestArgs(sampleRequest({ sourceUrls: [atLimit + "a"] })), /at most/);
+    assert.throws(() => buildRequestArgs(sampleRequest({ sourceUrls: ["https://a.com/x", "https://a.com/x"] })), /Duplicate/);
+    assert.throws(() => buildRequestArgs(sampleRequest({ sourceUrls: ["https://a.com/has space"] })), /http/);
   });
 
   it("caller summary cannot substitute for source evidence", () => {
@@ -254,11 +282,12 @@ describe("Verification record schema (offline)", () => {
   const dataclass = contractSrc.match(/class VerificationRecord:\n([\s\S]*?)\n\n\nclass /)[1];
   const recordFields = dataclass
     .split("\n")
-    .map((l) => l.trim().split(":")[0])
-    .filter(Boolean);
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"))
+    .map((l) => l.split(":")[0]);
 
   it("decoder accepts exactly the fields get_verification returns", () => {
-    const getter = contractSrc.match(/def get_verification\(self[\s\S]*?return \{([\s\S]*?)\n        \}/)[1];
+    const getter = contractSrc.match(/def _record_dict\(self[\s\S]*?return \{([\s\S]*?)\n        \}/)[1];
     const returned = [...getter.matchAll(/"(\w+)":/g)].map((m) => m[1]);
     assert.deepEqual(returned.sort(), [...recordFields].sort());
     assert.deepEqual(Object.keys(sampleContractRecord()).sort(), [...recordFields].sort());
@@ -278,8 +307,11 @@ describe("Verification record schema (offline)", () => {
     assert.equal(rec.confidence, 91);
     assert.equal(rec.rationale, "Source supports the claim.");
     assert.equal(rec.userContextSummary, "ctx");
-    assert.equal(rec.createdAt, "2026-10-13T00:00:00.000Z");
-    assert.equal(rec.finalizedAt, "2026-10-13T00:00:00.000Z");
+    assert.equal(rec.createdAtUntrusted, "2026-10-13T00:00:00.000Z");
+    assert.equal(rec.txDatetime, "2026-10-14T20:00:00Z");
+    // there is no authoritative finalization time and the untrusted requester time is never aliased to one
+    assert.equal(rec.finalizedAt, undefined);
+    assert.equal(rec.createdAt, undefined);
     // fields the contract does not return are NOT fabricated
     assert.equal(rec.transactionHash, undefined);
     assert.equal(rec.explorerUrl, undefined);
@@ -365,6 +397,7 @@ describe("Verification record schema (offline)", () => {
       "source_urls", "evidence_verified", "status", "decision", "confidence", "rationale",
       "user_context_summary", "transaction_hash", "created_at", "finalized_at",
     ]) {
+      // (created_at / finalized_at are DB row columns only; the contract record fields are not persisted into them)
       assert.match(sql, new RegExp(`\\b${col}\\b`), col);
     }
     assert.match(migration, /ADD COLUMN IF NOT EXISTS requester TEXT/);

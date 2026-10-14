@@ -52,8 +52,10 @@ export interface VerificationRecord {
   rationale: string;
   userContextSummary?: string;
   plainText?: string;
-  createdAt: string;
-  finalizedAt: string;
+  /** Requester-supplied, UNTRUSTED metadata. Never an authoritative time. */
+  createdAtUntrusted: string;
+  /** Transaction datetime assigned by the GenLayer runtime. Not a finality/finalization timestamp. */
+  txDatetime: string;
   transactionHash?: string;
   explorerUrl?: string;
 }

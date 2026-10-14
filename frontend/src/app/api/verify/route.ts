@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GenLayerVerifierService } from "@/lib/genlayer/verifier";
 import { validateGenLayerConfig } from "@/lib/genlayer/client";
 import { buildRequestArgs, REQUEST_VERIFICATION_PARAMS } from "@/lib/genlayer/protocol";
+import { fetchEvidenceCommitment } from "@/lib/genlayer/evidence";
 
 export const runtime = "nodejs";
 
@@ -61,6 +62,21 @@ export async function POST(req: NextRequest) {
         prepared: true,
       });
 
+    }
+
+    if (action === "commitment") {
+      try {
+        const { urls, commitment } = await fetchEvidenceCommitment(body.sourceUrls);
+        return NextResponse.json({
+          success: true,
+          commitment,
+          urls,
+          format: "GENCHAT-EVIDENCE-V2",
+          note: "Preview only. Validators re-fetch independently; a matching hash does not prove the sources are truthful.",
+        });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message }, { status: 400 });
+      }
     }
 
     if (action === "get") {

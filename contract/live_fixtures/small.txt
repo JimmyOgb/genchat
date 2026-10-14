@@ -1,0 +1,3 @@
+GenChat live fixture A.
+EIP stands for Ethereum Improvement Proposal. An EIP is a design document providing information to the Ethereum community.
+This statement is complete and has no corrections elsewhere in this file.
