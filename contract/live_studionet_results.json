@@ -1,0 +1,108 @@
+{
+  "kind": "LIVE_STUDIONET",
+  "network": "studionet",
+  "chainId": 61999,
+  "contractAddress": "0x4282234BF42F8e73De096E2f3C22A31F3b80e0f5",
+  "deploymentTransaction": "0xf5c0ea87cc4e8859da2b1a7f915a0283f144c6ff2c6fb952a8597f7d0d9282f1",
+  "ranAt": "2026-10-14T21:43:18.140Z",
+  "allPassed": true,
+  "results": [
+    {
+      "name": "L1 happy path (single small source)",
+      "verificationId": "live_1792014132780_9c8a3f",
+      "transactionHash": "0xff86746b399459adcc98070c0078985ff6c0fa866bc454a5b49d9fe34c41a95d",
+      "receiptStatus": "ACCEPTED",
+      "record": {
+        "decision": "APPROVED",
+        "confidence": 99,
+        "evidence_verified": true,
+        "actual_evidence_hash": "0xdbb36ecdd6dcc728e0b352d4794a32db6decb97cb38721ef1ed0f046eabf34af",
+        "expected_evidence_hash": "0xdbb36ecdd6dcc728e0b352d4794a32db6decb97cb38721ef1ed0f046eabf34af",
+        "question_hash": "0x6d70f8c23f21723e1a9dd54cd3b13a501b174af3608faf39282f5960ce750558",
+        "rationale": "The retrieved source explicitly states 'EIP stands for Ethereum Improvement Proposal,' directly and unequivocally supporting the claim. No contradictions are present in the evidence.",
+        "created_at_untrusted": "2000-01-01T00:00:00Z",
+        "tx_datetime": "2026-10-14T21:42:16.552768Z",
+        "source_urls_json": "[\"https://raw.githubusercontent.com/JimmyOgb/genchat/master/contract/live_fixtures/small.txt\"]",
+        "evidence_format": "GENCHAT-EVIDENCE-V2"
+      },
+      "pass": true,
+      "note": "decision=APPROVED (semantic assessment by validators; not a proof of factual truth)"
+    },
+    {
+      "name": "L2 evidence hash mismatch",
+      "verificationId": "live_1792014153996_e94058",
+      "transactionHash": "0x90236d5aebc08669f5617edc8fbe75c825517ca2c4cbcdc49a384c43f8d1ca9c",
+      "receiptStatus": "ACCEPTED",
+      "record": {
+        "decision": "INCONCLUSIVE",
+        "confidence": 0,
+        "evidence_verified": false,
+        "actual_evidence_hash": "0xdbb36ecdd6dcc728e0b352d4794a32db6decb97cb38721ef1ed0f046eabf34af",
+        "expected_evidence_hash": "0xfb396ede0fb8e2cb9fb1be94742f4f9be7c1d4c8635b55fb6c9d71ed57990699",
+        "question_hash": "0x6d70f8c23f21723e1a9dd54cd3b13a501b174af3608faf39282f5960ce750558",
+        "rationale": "Evidence hash mismatch: committed expected 0xfb396ede... but retrieved actual 0xdbb36ecd...",
+        "created_at_untrusted": "2000-01-01T00:00:00Z",
+        "tx_datetime": "2026-10-14T21:42:35.452690Z",
+        "source_urls_json": "[\"https://raw.githubusercontent.com/JimmyOgb/genchat/master/contract/live_fixtures/small.txt\"]",
+        "evidence_format": "GENCHAT-EVIDENCE-V2"
+      },
+      "pass": true
+    },
+    {
+      "name": "L3 source returns HTTP 404",
+      "verificationId": "live_1792014162452_6e756a",
+      "transactionHash": "0xdd24a60e4218a6889dfdfae4e679388e8183b9884d8af4e1d1078ee8ed8633b7",
+      "receiptStatus": "ACCEPTED",
+      "record": {
+        "decision": "INCONCLUSIVE",
+        "confidence": 0,
+        "evidence_verified": false,
+        "actual_evidence_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "expected_evidence_hash": "0x2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "question_hash": "0x6d70f8c23f21723e1a9dd54cd3b13a501b174af3608faf39282f5960ce750558",
+        "rationale": "Evidence retrieval failed: HTTP 404 from source: https://raw.githubusercontent.com/JimmyOgb/genchat/master/contract/live_fixtures/does-not-exist-404.txt",
+        "created_at_untrusted": "2000-01-01T00:00:00Z",
+        "tx_datetime": "2026-10-14T21:42:44.352652Z",
+        "source_urls_json": "[\"https://raw.githubusercontent.com/JimmyOgb/genchat/master/contract/live_fixtures/does-not-exist-404.txt\"]",
+        "evidence_format": "GENCHAT-EVIDENCE-V2"
+      },
+      "pass": true
+    },
+    {
+      "name": "L4 oversized response (> 16384 bytes)",
+      "verificationId": "live_1792014171063_306a5f",
+      "transactionHash": "0x72a734a60619430216d4654bd9eb39f6b03f11e5b8d84e78ef2a0ca607e3499b",
+      "receiptStatus": "ACCEPTED",
+      "record": {
+        "decision": "INCONCLUSIVE",
+        "confidence": 0,
+        "evidence_verified": false,
+        "actual_evidence_hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "expected_evidence_hash": "0x2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+        "question_hash": "0x6d70f8c23f21723e1a9dd54cd3b13a501b174af3608faf39282f5960ce750558",
+        "rationale": "Evidence retrieval failed: response exceeds 16384 bytes from source: https://raw.githubusercontent.com/JimmyOgb/genchat/master/contract/live_fixtures/big.txt",
+        "created_at_untrusted": "2000-01-01T00:00:00Z",
+        "tx_datetime": "2026-10-14T21:42:52.815402Z",
+        "source_urls_json": "[\"https://raw.githubusercontent.com/JimmyOgb/genchat/master/contract/live_fixtures/big.txt\"]",
+        "evidence_format": "GENCHAT-EVIDENCE-V2"
+      },
+      "pass": true
+    },
+    {
+      "name": "L5 question hash does not match canonical question",
+      "verificationId": "live_1792014179354_991e1d",
+      "transactionHash": "0x4f6c97edba58b00ac399bfcfd8f6206dd1a5cc316303c85431d9eedc8774b081",
+      "receiptStatus": "ACCEPTED",
+      "readback": "record not found",
+      "pass": true
+    },
+    {
+      "name": "L6 six source URLs",
+      "verificationId": "live_1792014188216_a5fb0e",
+      "transactionHash": "0xadff1a3862ca0ef5468dfc0d432617f8a991632932b31f03173ce1b136530366",
+      "receiptStatus": "ACCEPTED",
+      "readback": "record not found",
+      "pass": true
+    }
+  ]
+}
